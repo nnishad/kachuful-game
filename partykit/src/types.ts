@@ -3,6 +3,8 @@
  * Note: These types are duplicated in app/types/game.ts for the client
  */
 
+import type { KachufulGameState } from './kachuful/types'
+
 export type GameStatus = 'lobby' | 'starting' | 'playing' | 'finished'
 
 export type PlayerStatus = 'connected' | 'ready' | 'playing' | 'disconnected'
@@ -41,13 +43,13 @@ export interface GameState {
 }
 
 export interface ClientMessage {
-  type: 'create_lobby' | 'join_lobby' | 'leave_lobby' | 'start_game' | 'ready' | 'play_card' | 'chat' | 'kick_player'
+  type: 'create_lobby' | 'join_lobby' | 'leave_lobby' | 'start_game' | 'ready' | 'play_card' | 'chat' | 'kick_player' | 'start_kachuful_game' | 'place_bid' | 'play_kachuful_card'
   payload: CreateLobbyPayload | JoinLobbyPayload | PlayCardPayload | ChatPayload | KickPlayerPayload | Record<string, unknown>
 }
 
 export interface ServerMessage {
-  type: 'lobby_created' | 'lobby_joined' | 'game_state' | 'player_joined' | 'player_left' | 'player_kicked' | 'host_changed' | 'turn_update' | 'game_started' | 'game_ended' | 'lobby_destroyed' | 'error' | 'chat'
-  payload: LobbyInfo | GameState | Player | ChatPayload | { message: string } | Record<string, unknown>
+  type: 'lobby_created' | 'lobby_joined' | 'game_state' | 'player_joined' | 'player_left' | 'player_kicked' | 'host_changed' | 'turn_update' | 'game_started' | 'game_ended' | 'lobby_destroyed' | 'error' | 'chat' | 'kachuful_game_state' | 'round_started' | 'trump_revealed' | 'bid_placed' | 'card_played' | 'trick_completed' | 'round_completed'
+  payload: LobbyInfo | GameState | Player | ChatPayload | { message: string } | KachufulGameState | Record<string, unknown>
   timestamp: number
 }
 

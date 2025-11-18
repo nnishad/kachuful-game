@@ -14,6 +14,8 @@ import type {
   LobbyInfo
 } from "./types"
 import { generateLobbyCode } from "./utils"
+import { KachufulEngine } from "./kachuful/gameEngine"
+import type { GameSettings, KachufulGameState } from "./kachuful/types"
 
 /**
  * Card Masters Game Server - Enterprise Lobby System
@@ -26,6 +28,7 @@ import { generateLobbyCode } from "./utils"
  */
 export default class CardMastersServer implements Party.Server {
   gameState: GameState
+  kachufulEngine: KachufulEngine | null = null
   
   constructor(readonly room: Party.Room) {
     // Generate unique lobby code for this room
@@ -91,6 +94,16 @@ export default class CardMastersServer implements Party.Server {
           break
         case 'kick_player':
           this.handleKickPlayer(sender, msg.payload as KickPlayerPayload)
+          break
+        // Kachuful game messages
+        case 'start_kachuful_game':
+          this.handleStartKachufulGame(sender, msg.payload)
+          break
+        case 'place_bid':
+          this.handlePlaceBid(sender, msg.payload)
+          break
+        case 'play_kachuful_card':
+          this.handlePlayKachufulCard(sender, msg.payload)
           break
         default:
           this.sendError(sender, 'Unknown message type')
@@ -553,6 +566,197 @@ export default class CardMastersServer implements Party.Server {
     this.broadcastMessage({
       type: 'lobby_destroyed',
       payload: { message: 'Lobby has been destroyed' },
+      timestamp: Date.now(),
+    })
+  }
+
+  /**
+   * ====================================
+   * Kachuful Game Handlers
+   * ====================================
+   */
+
+  /**
+   * Handle Kachuful game start
+   */
+  private handleStartKachufulGame(conn: Party.Connection, payload: any) {
+    if (conn.id !== this.gameState.hostId) {
+      this.sendError(conn, 'Only host can start game')
+      return
+    }
+
+    if (this.kachufulEngine) {
+      this.sendError(conn, 'Kachuful game already started')
+      return
+    }
+
+    if (this.gameState.players.length < 3) {
+      this.sendError(conn, 'Need at least 3 players for Kachuful')
+      return
+    }
+
+    try {
+      // Create Kachuful engine
+      this.kachufulEngine = new KachufulEngine(
+        this.gameState.lobbyCode,
+        this.gameState.hostId,
+        this.gameState.players,
+        this.gameState.maxPlayers
+      )
+
+      // Start game with settings
+      const settings = payload.settings as GameSettings
+      const kachufulState = this.kachufulEngine.startGame(settings)
+
+      // Broadcast Kachuful game state
+      this.broadcastKachufulState(kachufulState)
+
+      // Broadcast round started
+      this.broadcastMessage({
+        type: 'round_started',
+        payload: {
+          roundNumber: kachufulState.currentRound,
+          cardsPerPlayer: kachufulState.roundConfig.cardsPerPlayer,
+        },
+        timestamp: Date.now(),
+      })
+
+      // Broadcast trump revealed
+      this.broadcastMessage({
+        type: 'trump_revealed',
+        payload: {
+          trumpCard: kachufulState.trumpCard,
+          trumpSuit: kachufulState.trumpSuit,
+          isNoTrump: kachufulState.isNoTrump,
+        },
+        timestamp: Date.now(),
+      })
+    } catch (error) {
+      console.error('[Server] Error starting Kachuful game:', error)
+      this.sendError(conn, error instanceof Error ? error.message : 'Failed to start game')
+    }
+  }
+
+  /**
+   * Handle bid placement
+   */
+  private handlePlaceBid(conn: Party.Connection, payload: any) {
+    if (!this.kachufulEngine) {
+      this.sendError(conn, 'Kachuful game not started')
+      return
+    }
+
+    try {
+      const kachufulState = this.kachufulEngine.placeBid(conn.id, payload.bid)
+
+      // Get player name
+      const player = this.findPlayer(conn.id)
+
+      // Broadcast bid placed
+      this.broadcastMessage({
+        type: 'bid_placed',
+        payload: {
+          playerId: conn.id,
+          playerName: player?.name || 'Unknown',
+          bid: payload.bid,
+        },
+        timestamp: Date.now(),
+      })
+
+      // Broadcast updated state
+      this.broadcastKachufulState(kachufulState)
+    } catch (error) {
+      console.error('[Server] Error placing bid:', error)
+      this.sendError(conn, error instanceof Error ? error.message : 'Failed to place bid')
+    }
+  }
+
+  /**
+   * Handle card play
+   */
+  private handlePlayKachufulCard(conn: Party.Connection, payload: any) {
+    if (!this.kachufulEngine) {
+      this.sendError(conn, 'Kachuful game not started')
+      return
+    }
+
+    try {
+      const kachufulState = this.kachufulEngine.playCard(conn.id, payload.cardId)
+
+      // Get player and card details
+      const player = this.findPlayer(conn.id)
+      const card = kachufulState.currentTrick.cardsPlayed.find(
+        pc => pc.playerId === conn.id
+      )?.card
+
+      if (card) {
+        // Broadcast card played
+        this.broadcastMessage({
+          type: 'card_played',
+          payload: {
+            playerId: conn.id,
+            playerName: player?.name || 'Unknown',
+            card,
+          },
+          timestamp: Date.now(),
+        })
+      }
+
+      // Broadcast updated state
+      this.broadcastKachufulState(kachufulState)
+
+      // Check if trick completed
+      if (kachufulState.phase === 'trick_result') {
+        const winningPlayer = this.findPlayer(kachufulState.currentTrick.winnerId || '')
+
+        this.broadcastMessage({
+          type: 'trick_completed',
+          payload: {
+            winnerId: kachufulState.currentTrick.winnerId!,
+            winnerName: winningPlayer?.name || 'Unknown',
+            trick: kachufulState.currentTrick,
+          },
+          timestamp: Date.now(),
+        })
+      }
+
+      // Check if round completed
+      if (kachufulState.phase === 'round_scoring') {
+        const lastRound = kachufulState.roundHistory[kachufulState.roundHistory.length - 1]
+
+        this.broadcastMessage({
+          type: 'round_completed',
+          payload: {
+            roundResult: lastRound,
+          },
+          timestamp: Date.now(),
+        })
+      }
+
+      // Check if game ended
+      if (kachufulState.phase === 'game_end') {
+        this.broadcastMessage({
+          type: 'game_ended',
+          payload: {
+            winners: this.kachufulEngine.getWinners(),
+            finalStandings: this.kachufulEngine.getFinalStandings(),
+          },
+          timestamp: Date.now(),
+        })
+      }
+    } catch (error) {
+      console.error('[Server] Error playing card:', error)
+      this.sendError(conn, error instanceof Error ? error.message : 'Failed to play card')
+    }
+  }
+
+  /**
+   * Broadcast Kachuful game state
+   */
+  private broadcastKachufulState(state: KachufulGameState) {
+    this.broadcastMessage({
+      type: 'kachuful_game_state',
+      payload: state,
       timestamp: Date.now(),
     })
   }

@@ -143,6 +143,36 @@ export class GameClient {
   }
 
   /**
+   * Start Kachuful game with settings
+   */
+  startKachufulGame(settings: any) {
+    this.send({
+      type: 'start_kachuful_game',
+      payload: { settings },
+    })
+  }
+
+  /**
+   * Place a bid in Kachuful
+   */
+  placeBid(bid: number) {
+    this.send({
+      type: 'place_bid',
+      payload: { bid },
+    })
+  }
+
+  /**
+   * Play a Kachuful card
+   */
+  playKachufulCard(cardId: string) {
+    this.send({
+      type: 'play_kachuful_card',
+      payload: { cardId },
+    })
+  }
+
+  /**
    * Send message to server
    */
   private send(message: ClientMessage) {
@@ -237,6 +267,12 @@ export function useGameClient(host: string, roomId: string) {
   const kickPlayer = useCallback((playerId: string) => clientRef.current?.kickPlayer(playerId), [])
   const playCard = useCallback((cardId: string, target?: string) => clientRef.current?.playCard(cardId, target), [])
   const chat = useCallback((message: string) => clientRef.current?.chat(message), [])
+  
+  // Kachuful methods
+  const startKachufulGame = useCallback((settings: any) => clientRef.current?.startKachufulGame(settings), [])
+  const placeBid = useCallback((bid: number) => clientRef.current?.placeBid(bid), [])
+  const playKachufulCard = useCallback((cardId: string) => clientRef.current?.playKachufulCard(cardId), [])
+  
   const on = useCallback((event: string, callback: (data: unknown) => void) => clientRef.current?.on(event, callback), [])
   const off = useCallback((event: string, callback: (data: unknown) => void) => clientRef.current?.off(event, callback), [])
 
@@ -253,6 +289,9 @@ export function useGameClient(host: string, roomId: string) {
     kickPlayer,
     playCard,
     chat,
+    startKachufulGame,
+    placeBid,
+    playKachufulCard,
     on,
     off,
   }
