@@ -8,6 +8,7 @@ import { GameHeader } from 'components/GameHeader'
 import { useGameClient } from 'utils/gameClient'
 import { useResponsive, useResponsiveIconSize } from 'hooks/useResponsive'
 import type { GameState, Player, LobbyInfo } from 'types/game'
+import { useRouter } from 'expo-router'
 
 // Configure your PartyKit host here
 const PARTYKIT_HOST = process.env.EXPO_PUBLIC_PARTYKIT_HOST || 'localhost:1999'
@@ -15,6 +16,7 @@ const PARTYKIT_HOST = process.env.EXPO_PUBLIC_PARTYKIT_HOST || 'localhost:1999'
 type ScreenMode = 'home' | 'create' | 'join' | 'lobby' | 'game'
 
 export default function LandingScreen() {
+  const router = useRouter()
   const { isMobile } = useResponsive()
   const iconSizes = useResponsiveIconSize()
 
@@ -294,6 +296,18 @@ export default function LandingScreen() {
             >
               Join Lobby
             </Button>
+
+            <Button
+              size={isMobile ? '$4' : '$5'}
+              bg="$accent"
+              icon={<Play size={iconSizes.sm} />}
+              onPress={() => router.push('/game-table')}
+              pressStyle={{ scale: 0.97 }}
+              hoverStyle={{ scale: 1.02 }}
+              animation="bouncy"
+            >
+              Test Game Table
+            </Button>
           </YStack>
           
           {!isConnected && (
@@ -454,7 +468,7 @@ export default function LandingScreen() {
     return (
       <ResponsiveContainer key="lobby" bg="$background">
         <GameHeader />
-        <YStack flex={1} px={isMobile ? '$3' : '$4'} py="$3" gap="$3" maxWidth={800} alignSelf="center" width="100%">
+        <YStack flex={1} px={isMobile ? '$3' : '$4'} py="$3" gap="$3" width="100%" style={{ maxWidth: 800, alignSelf: 'center' }}>
           {/* Success Message */}
           {successMessage ? (
             <Card bg="$backgroundHover" borderColor="$secondary" bordered p="$3" animation="quick" enterStyle={{ opacity: 0, y: -10 }} exitStyle={{ opacity: 0, y: -10 }}>
@@ -483,7 +497,7 @@ export default function LandingScreen() {
 
                 <XStack gap="$2" flexWrap="wrap">
                   {/* Code Box */}
-                  <XStack flex={1} minWidth={140} bg="rgba(0,0,0,0.2)" p="$2" borderRadius="$3" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)">
+                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
                     <YStack>
                       <Paragraph color="white" opacity={0.6} fontSize={9} fontWeight="bold" letterSpacing={1}>CODE</Paragraph>
                       <H2 color="$accent" fontWeight="900" letterSpacing={1} fontSize="$6">{lobbyCode.slice(0, 3)}-{lobbyCode.slice(3)}</H2>
@@ -499,7 +513,7 @@ export default function LandingScreen() {
                   </XStack>
 
                   {/* Link Box */}
-                  <XStack flex={1} minWidth={140} bg="rgba(0,0,0,0.2)" p="$2" borderRadius="$3" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)">
+                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
                     <YStack flex={1} mr="$2">
                       <Paragraph color="white" opacity={0.6} fontSize={9} fontWeight="bold" letterSpacing={1}>INVITE LINK</Paragraph>
                       <Paragraph numberOfLines={1} ellipsizeMode="middle" color="white" fontSize="$3" opacity={0.9}>
@@ -536,8 +550,8 @@ export default function LandingScreen() {
                 )}
               </XStack>
               
-              <ScrollView flex={1} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 8 }}>
-                <YStack gap="$2">
+              <ScrollView flex={1} showsVerticalScrollIndicator={false}>
+                <YStack gap="$2" p="$2">
                   {gameState.players.map((player: Player, index: number) => (
                     <XStack 
                       key={player.id} 
@@ -545,12 +559,11 @@ export default function LandingScreen() {
                       justify="space-between" 
                       p="$2" 
                       bg={player.id === currentPlayerId ? "$primary" : "$background"}
-                      borderRadius="$3"
                       borderWidth={1}
                       borderColor={player.id === currentPlayerId ? "$primary" : "$borderColor"}
                       animation="bouncy"
                       enterStyle={{ opacity: 0, x: -20, scale: 0.9 }}
-                      style={{ animationDelay: `${index * 50}ms` }}
+                      style={{ animationDelay: `${index * 50}ms`, borderRadius: 12 }}
                       pressStyle={{ scale: 0.99 }}
                     >
                       <XStack items="center" gap="$3" flex={1}>
@@ -577,7 +590,7 @@ export default function LandingScreen() {
                             bg="$error"
                             chromeless={player.id !== currentPlayerId}
                             color={player.id === currentPlayerId ? "white" : "$error"}
-                            hoverStyle={{ bg: "$error", color: "white" }}
+                            hoverStyle={{ bg: "$error" }}
                           />
                         )}
                       </XStack>
@@ -600,7 +613,7 @@ export default function LandingScreen() {
                     color="$error"
                     icon={<LogOut size={16} />}
                     onPress={handleLeaveLobby}
-                    pressStyle={{ bg: "$error", color: "white" }}
+                    pressStyle={{ bg: "$error" }}
                     animation="bouncy"
                   >
                     Leave

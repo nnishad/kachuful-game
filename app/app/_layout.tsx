@@ -66,6 +66,14 @@ function RootLayoutNav() {
         />
 
         <Stack.Screen
+          name="game-table"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
+
+        <Stack.Screen
           name="(tabs)"
           options={{
             headerShown: false,
