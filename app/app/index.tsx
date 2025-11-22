@@ -265,8 +265,8 @@ export default function LandingScreen() {
     return (
       <ResponsiveContainer key="home" bg="$background">
         <GameHeader />
-        <YStack flex={1} items="center" justify="center" px={isMobile ? '$3' : '$4'} gap="$4">
-          <YStack items="center" gap="$2">
+        <YStack flex={1} alignItems="center" justifyContent="center" px={isMobile ? '$3' : '$4'} gap="$4">
+          <YStack alignItems="center" gap="$2">
             <Crown size={iconSizes.xl} color="$primary" />
             <H2 color="$primary" fontWeight="bold">Card Masters</H2>
             <Paragraph color="$colorHover">Multiplayer Lobby</Paragraph>
@@ -323,10 +323,10 @@ export default function LandingScreen() {
     return (
       <ResponsiveContainer key="create" bg="$background">
         <GameHeader />
-        <YStack flex={1} items="center" justify="center" px={isMobile ? '$3' : '$4'} gap="$4">
+        <YStack flex={1} alignItems="center" justifyContent="center" px={isMobile ? '$3' : '$4'} gap="$4">
           <Card elevate bordered p={isMobile ? '$4' : '$6'} width="100%" maxWidth={400}>
             <YStack gap="$4">
-              <YStack items="center" gap="$2">
+              <YStack alignItems="center" gap="$2">
                 <Crown size={iconSizes.xl} color="$primary" />
                 <H2 color="$primary">Create Lobby</H2>
                 <Paragraph color="$colorHover">
@@ -345,8 +345,8 @@ export default function LandingScreen() {
               </YStack>
 
               {error ? (
-                <Card bg="$backgroundHover" borderColor="$error" bordered p="$2" animation="quick">
-                  <XStack items="center" gap="$2">
+                <Card bg="$backgroundHover" borderColor="$error" bordered p="$2" animation="medium">
+                  <XStack alignItems="center" gap="$2">
                     <AlertCircle size={iconSizes.xs} color="$error" />
                     <Paragraph color="$error" fontSize="$3" flex={1}>{error}</Paragraph>
                   </XStack>
@@ -390,10 +390,10 @@ export default function LandingScreen() {
     return (
       <ResponsiveContainer key="join" bg="$background">
         <GameHeader />
-        <YStack flex={1} items="center" justify="center" px={isMobile ? '$3' : '$4'} gap="$4">
+        <YStack flex={1} alignItems="center" justifyContent="center" px={isMobile ? '$3' : '$4'} gap="$4">
           <Card elevate bordered p={isMobile ? '$4' : '$6'} width="100%" maxWidth={400}>
             <YStack gap="$4">
-              <YStack items="center" gap="$2">
+              <YStack alignItems="center" gap="$2">
                 <Users size={iconSizes.xl} color="$secondary" />
                 <H2 color="$primary">Join Lobby</H2>
                 <Paragraph color="$colorHover">
@@ -423,8 +423,8 @@ export default function LandingScreen() {
               </YStack>
 
               {error ? (
-                <Card bg="$backgroundHover" borderColor="$error" bordered p="$2" animation="quick">
-                  <XStack items="center" gap="$2">
+                <Card bg="$backgroundHover" borderColor="$error" bordered p="$2" animation="medium">
+                  <XStack alignItems="center" gap="$2">
                     <AlertCircle size={iconSizes.xs} color="$error" />
                     <Paragraph color="$error" fontSize="$3" flex={1}>{error}</Paragraph>
                   </XStack>
@@ -471,8 +471,8 @@ export default function LandingScreen() {
         <YStack flex={1} px={isMobile ? '$3' : '$4'} py="$3" gap="$3" width="100%" style={{ maxWidth: 800, alignSelf: 'center' }}>
           {/* Success Message */}
           {successMessage ? (
-            <Card bg="$backgroundHover" borderColor="$secondary" bordered p="$3" animation="quick" enterStyle={{ opacity: 0, y: -10 }} exitStyle={{ opacity: 0, y: -10 }}>
-              <XStack items="center" gap="$2">
+            <Card bg="$backgroundHover" borderColor="$secondary" bordered p="$3" animation="medium" enterStyle={{ opacity: 0, y: -10 }} exitStyle={{ opacity: 0, y: -10 }}>
+              <XStack alignItems="center" gap="$2">
                 <Check size={iconSizes.sm} color="$secondary" />
                 <Paragraph color="$secondary" fontSize="$4" fontWeight="bold" flex={1}>{successMessage}</Paragraph>
               </XStack>
@@ -485,8 +485,8 @@ export default function LandingScreen() {
             {/* Top Section: Code & Info */}
             <Card elevate bordered bg="$primary" p="$3" animation="bouncy" enterStyle={{ opacity: 0, scale: 0.95, y: 10 }}>
               <YStack gap="$3">
-                <XStack items="center" justify="space-between">
-                  <XStack items="center" gap="$2">
+                <XStack alignItems="center" justifyContent="space-between">
+                  <XStack alignItems="center" gap="$2">
                     <Crown size={20} color="$accent" />
                     <H3 color="white" fontWeight="800" fontSize="$5">Game Lobby</H3>
                   </XStack>
@@ -497,7 +497,7 @@ export default function LandingScreen() {
 
                 <XStack gap="$2" flexWrap="wrap">
                   {/* Code Box */}
-                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
+                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" alignItems="center" justifyContent="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
                     <YStack>
                       <Paragraph color="white" opacity={0.6} fontSize={9} fontWeight="bold" letterSpacing={1}>CODE</Paragraph>
                       <H2 color="$accent" fontWeight="900" letterSpacing={1} fontSize="$6">{lobbyCode.slice(0, 3)}-{lobbyCode.slice(3)}</H2>
@@ -513,7 +513,7 @@ export default function LandingScreen() {
                   </XStack>
 
                   {/* Link Box */}
-                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" items="center" justify="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
+                  <XStack flex={1} bg="rgba(0,0,0,0.2)" p="$2" alignItems="center" justifyContent="space-between" borderWidth={1} borderColor="rgba(255,255,255,0.1)" style={{ minWidth: 140, borderRadius: 12 }}>
                     <YStack flex={1} mr="$2">
                       <Paragraph color="white" opacity={0.6} fontSize={9} fontWeight="bold" letterSpacing={1}>INVITE LINK</Paragraph>
                       <Paragraph numberOfLines={1} ellipsizeMode="middle" color="white" fontSize="$3" opacity={0.9}>
@@ -535,8 +535,8 @@ export default function LandingScreen() {
 
             {/* Players List */}
             <Card elevate bordered flex={1} bg="$backgroundStrong" overflow="hidden" p={0} animation="lazy" enterStyle={{ opacity: 0, y: 20 }}>
-              <XStack items="center" justify="space-between" px="$3" py="$2" bg="$background" borderBottomWidth={1} borderColor="$borderColor">
-                <XStack items="center" gap="$2">
+              <XStack alignItems="center" justifyContent="space-between" px="$3" py="$2" bg="$background" borderBottomWidth={1} borderColor="$borderColor">
+                <XStack alignItems="center" gap="$2">
                   <Users size={18} color="$primary" />
                   <Paragraph color="$color" fontWeight="bold" fontSize="$4">Players</Paragraph>
                   <Card bg="$primary" px="$2" py="$1" borderRadius="$4">
@@ -555,8 +555,8 @@ export default function LandingScreen() {
                   {gameState.players.map((player: Player, index: number) => (
                     <XStack 
                       key={player.id} 
-                      items="center" 
-                      justify="space-between" 
+                      alignItems="center" 
+                      justifyContent="space-between" 
                       p="$2" 
                       bg={player.id === currentPlayerId ? "$primary" : "$background"}
                       borderWidth={1}
@@ -566,12 +566,12 @@ export default function LandingScreen() {
                       style={{ animationDelay: `${index * 50}ms`, borderRadius: 12 }}
                       pressStyle={{ scale: 0.99 }}
                     >
-                      <XStack items="center" gap="$3" flex={1}>
+                      <XStack alignItems="center" gap="$3" flex={1}>
                         <Circle size="$3" bg={player.isHost ? "$accent" : (player.id === currentPlayerId ? "white" : "$backgroundHover")} borderWidth={1} borderColor="$borderColor">
                            {player.isHost ? <Crown size={14} color={player.id === currentPlayerId ? "$primary" : "$color"} /> : <Users size={14} color={player.id === currentPlayerId ? "$primary" : "$color"} />}
                         </Circle>
                         <YStack flex={1}>
-                          <XStack items="center" gap="$2">
+                          <XStack alignItems="center" gap="$2">
                             <Paragraph fontWeight="bold" color={player.id === currentPlayerId ? "white" : "$color"} fontSize="$3">{player.name}</Paragraph>
                             {player.id === currentPlayerId && (
                               <Paragraph color="white" opacity={0.8} fontSize={10}>(You)</Paragraph>
@@ -580,7 +580,7 @@ export default function LandingScreen() {
                         </YStack>
                       </XStack>
                       
-                      <XStack items="center" gap="$2">
+                      <XStack alignItems="center" gap="$2">
                         <Circle size={8} bg={player.status === 'connected' ? "$success" : "$warning"} />
                         {isHost && !player.isHost && (
                           <Button
@@ -637,8 +637,8 @@ export default function LandingScreen() {
                 </XStack>
               ) : (
                 <YStack gap="$3">
-                  <Card bg="$backgroundHover" p="$3" bordered borderColor="$primary" animation="quick">
-                    <XStack items="center" gap="$3" justify="center">
+                  <Card bg="$backgroundHover" p="$3" bordered borderColor="$primary" animation="medium">
+                    <XStack alignItems="center" gap="$3" justifyContent="center">
                       <Spinner size="small" color="$primary" />
                       <Paragraph color="$primary" fontWeight="bold">Waiting for host to start...</Paragraph>
                     </XStack>
@@ -668,9 +668,9 @@ export default function LandingScreen() {
     return (
       <ResponsiveContainer key="game" bg="$background">
         <GameHeader />
-        <YStack flex={1} items="center" justify="center" px={isMobile ? '$3' : '$4'} gap="$4">
+        <YStack flex={1} alignItems="center" justifyContent="center" px={isMobile ? '$3' : '$4'} gap="$4">
           <Card elevate bordered p={isMobile ? '$4' : '$6'}>
-            <YStack gap="$3" items="center">
+            <YStack gap="$3" alignItems="center">
               <H2 color="$primary">Game Started!</H2>
               <Paragraph>Round: {gameState.round}</Paragraph>
               <Paragraph>Current Turn: {gameState.players.find(p => p.id === gameState.currentTurn)?.name}</Paragraph>

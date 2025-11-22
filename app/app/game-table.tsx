@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Stack, XStack, YStack } from 'tamagui'
 import { useResponsive } from '../hooks/useResponsive'
 import { ResponsiveContainer } from '../components/ResponsiveContainer'
-import { CenterPile } from '../components/game-table/CenterPile'
+import { CardFlight } from '../components/game-table/CardFlight'
+import { CenterDeck } from '../components/game-table/CenterDeck'
 import { FloatingCards, type FloatingCardDecoration } from '../components/game-table/FloatingCards'
 import { PlayerBadge } from '../components/game-table/PlayerBadge'
 import { PlayerHand } from '../components/game-table/PlayerHand'
 import { TrumpCardSpotlight } from '../components/game-table/TrumpCardSpotlight'
-import { getPlayerPosition } from '../components/game-table/playerLayout'
+import { getDeckOrigin, type Point2D } from '../components/game-table/animationTargets'
+import { getPlayerDirection, getPlayerPosition, getPlayerTargetPoint, type PlayerDirection } from '../components/game-table/playerLayout'
 import type { PlayingCard, TablePlayer } from '../components/game-table/types'
 import type { GameCardSize } from '../components/game-table/GameCard'
 
@@ -33,19 +35,6 @@ export default function GameTable() {
       { suit: '♠', rank: 'J', id: 'c3' },
       { suit: '♠', rank: 'K', id: 'c4' },
       { suit: '♦', rank: 'Q', id: 'c5' },
-      { suit: '♥', rank: '5', id: 'c6' },
-      { suit: '♥', rank: '8', id: 'c7' },
-    ],
-    []
-  )
-
-  const centerCards = useMemo<PlayingCard[]>(
-    () => [
-      { suit: '♣', rank: '4', id: 'cc1' },
-      { suit: '♠', rank: '2', id: 'cc2' },
-      { suit: '♦', rank: 'K', id: 'cc3' },
-      { suit: '♥', rank: '3', id: 'cc4' },
-      { suit: '♦', rank: '3', id: 'cc5' },
     ],
     []
   )
@@ -61,6 +50,17 @@ export default function GameTable() {
 
   const trumpCard = useMemo<PlayingCard>(() => ({ suit: '♠', rank: 'A', id: 'trump' }), [])
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
+  const [dealtCounts, setDealtCounts] = useState<Record<string, number>>(() =>
+    players.reduce((acc, player) => ({ ...acc, [player.id]: 0 }), {})
+  )
+  type ActiveFlight = {
+    id: string
+    playerId: string
+    direction: PlayerDirection
+    target: Point2D
+  }
+
+  const [activeFlights, setActiveFlights] = useState<ActiveFlight[]>([])
 
   const toggleCardSelection = (cardId: string) => {
     setSelectedCards((prev) => {
@@ -75,10 +75,89 @@ export default function GameTable() {
   }
 
   const cardSize: GameCardSize = isMobile ? 'normal' : isTablet ? 'normal' : 'large'
-  const centerCardSize: GameCardSize = isMobile ? 'small' : 'normal'
 
   const currentPlayer = players[0]
   const otherPlayers = players.slice(1)
+
+  const playerDirections = useMemo<Record<string, PlayerDirection>>(
+    () =>
+      players.reduce((acc, player, index) => {
+        acc[player.id] = getPlayerDirection(index, players.length)
+        return acc
+      }, {} as Record<string, PlayerDirection>),
+    [players]
+  )
+
+  const deckOrigin = useMemo(() => getDeckOrigin(width, height), [width, height])
+
+  const playerTargets = useMemo<Record<string, Point2D>>(
+    () =>
+      players.reduce((acc, player, index) => {
+        acc[player.id] = getPlayerTargetPoint(index, players.length, width, height, isMobile)
+        return acc
+      }, {} as Record<string, Point2D>),
+    [players, width, height, isMobile]
+  )
+
+  useEffect(() => {
+    const totalDeals = players.length * 5
+    const travelDuration = isMobile ? 360 : 440
+    let cancelled = false
+    let flightTimer: ReturnType<typeof setTimeout> | null = null
+    let delayTimer: ReturnType<typeof setTimeout> | null = null
+    let dealIndex = 0
+
+    const tick = () => {
+      if (cancelled || dealIndex >= totalDeals) {
+        setActiveFlights([])
+        return
+      }
+
+      const targetPlayer = players[dealIndex % players.length]
+      const direction = playerDirections[targetPlayer.id] ?? 'top'
+      const dealId = `${targetPlayer.id}-${dealIndex}`
+      const targetPoint = playerTargets[targetPlayer.id] ?? deckOrigin
+
+      setActiveFlights((prev) => [...prev.filter((flight) => flight.id !== dealId), { id: dealId, playerId: targetPlayer.id, direction, target: targetPoint }])
+
+      flightTimer = setTimeout(() => {
+        if (cancelled) {
+          return
+        }
+        setDealtCounts((prev) => ({
+          ...prev,
+          [targetPlayer.id]: Math.min((prev[targetPlayer.id] ?? 0) + 1, 5),
+        }))
+        setActiveFlights((prev) => prev.filter((flight) => flight.id !== dealId))
+        dealIndex += 1
+        delayTimer = setTimeout(tick, 140)
+      }, travelDuration)
+    }
+
+    tick()
+
+    return () => {
+      cancelled = true
+      if (flightTimer) clearTimeout(flightTimer)
+      if (delayTimer) clearTimeout(delayTimer)
+      setActiveFlights([])
+    }
+  }, [players, playerDirections, playerTargets, deckOrigin, isMobile])
+
+  const visibleHandCount = Math.min(playerHand.length, dealtCounts[currentPlayer.id] ?? 0)
+  const visibleHand = useMemo(() => playerHand.slice(0, visibleHandCount), [playerHand, visibleHandCount])
+
+  useEffect(() => {
+    setSelectedCards((prev) => {
+      const allowedIds = new Set(visibleHand.map((card) => card.id))
+      const filtered = new Set(Array.from(prev).filter((id) => allowedIds.has(id)))
+      return filtered.size === prev.size ? prev : filtered
+    })
+  }, [visibleHand])
+
+  const totalDealsNeeded = players.length * 5
+  const totalDealt = players.reduce((sum, player) => sum + (dealtCounts[player.id] ?? 0), 0)
+  const remainingCards = Math.max(totalDealsNeeded - totalDealt - activeFlights.length, 0)
 
   return (
     <ResponsiveContainer bg="$background" overflow="hidden">
@@ -98,6 +177,7 @@ export default function GameTable() {
             player={player}
             isMobile={isMobile}
             placementStyle={getPlayerPosition(idx + 1, players.length, width, height, isMobile)}
+            dealtCount={dealtCounts[player.id] ?? 0}
           />
         ))}
 
@@ -107,8 +187,18 @@ export default function GameTable() {
           ai="center"
           style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
         >
-          <CenterPile cards={centerCards} cardSize={centerCardSize} maxWidth={isMobile ? 200 : 300} />
+          <CenterDeck remainingCards={remainingCards} isAnimating={activeFlights.length > 0} />
         </YStack>
+
+        {activeFlights.map((flight) => (
+          <CardFlight
+            key={flight.id}
+            direction={flight.direction}
+            origin={deckOrigin}
+            target={flight.target}
+            isMobile={isMobile}
+          />
+        ))}
 
         <YStack
           position="absolute"
@@ -119,13 +209,18 @@ export default function GameTable() {
           paddingHorizontal={isMobile ? '$3' : '$4'}
         >
           <XStack jc="space-between" ai="flex-end" gap="$3">
-            <PlayerBadge player={currentPlayer} isMobile={isMobile} variant="inline" />
+            <PlayerBadge
+              player={currentPlayer}
+              isMobile={isMobile}
+              variant="inline"
+              dealtCount={dealtCounts[currentPlayer.id] ?? 0}
+            />
             <YStack flex={0} width={isMobile ? 40 : 48} />
           </XStack>
         </YStack>
 
         <PlayerHand
-          cards={playerHand}
+          cards={visibleHand}
           selectedCards={selectedCards}
           onToggle={toggleCardSelection}
           cardSize={cardSize}

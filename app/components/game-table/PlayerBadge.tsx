@@ -8,15 +8,16 @@ interface PlayerBadgeProps {
   isMobile: boolean
   placementStyle?: Record<string, any>
   variant?: 'overlay' | 'inline'
+  dealtCount?: number
 }
 
-function Component({ player, isMobile, placementStyle, variant = 'overlay' }: PlayerBadgeProps) {
+function Component({ player, isMobile, placementStyle, variant = 'overlay', dealtCount = 0 }: PlayerBadgeProps) {
   const avatarSize = isMobile ? 36 : 48
 
   return (
     // @ts-ignore - Tamagui props
     <XStack
-      bg="linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(30, 30, 50, 0.85) 100%)"
+      bg="rgba(15, 20, 35, 0.92)"
       br="$4"
       py="$2"
       px="$2"
@@ -28,16 +29,19 @@ function Component({ player, isMobile, placementStyle, variant = 'overlay' }: Pl
       shadowRadius={player.isCurrentTurn ? 12 : 6}
       shadowOpacity={player.isCurrentTurn ? 0.9 : 0.5}
       shadowOffset={{ width: 0, height: 3 }}
-      animation="quick"
+      animation="bouncy"
       style={
         variant === 'overlay'
           ? {
+              backgroundImage: 'linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(30, 30, 50, 0.85) 100%)',
               position: 'absolute',
               backgroundColor: 'rgba(15, 20, 35, 0.92)',
               backdropFilter: 'blur(10px)',
               ...placementStyle,
             }
-          : undefined
+          : {
+              backgroundImage: 'linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(30, 30, 50, 0.85) 100%)',
+            }
       }
     >
       {/* Avatar glow */}
@@ -50,19 +54,19 @@ function Component({ player, isMobile, placementStyle, variant = 'overlay' }: Pl
             left={-3}
             bg="#10B981"
             opacity={0.3}
-            animation="quick"
+            animation="bouncy"
           />
         )}
         <Circle
           size={avatarSize}
           overflow="hidden"
-          bg="linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%)"
+          bg="#F1F5F9"
           borderWidth={1.5}
           borderColor={player.isCurrentTurn ? '#10B981' : 'rgba(255, 255, 255, 0.2)'}
           shadowColor="#000"
           shadowRadius={3}
           shadowOpacity={0.3}
-          style={{ backgroundColor: '#F1F5F9' }}
+          style={{ backgroundImage: 'linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%)', backgroundColor: '#F1F5F9' }}
         >
           <Text fontSize={isMobile ? 18 : 24}>{player.avatar ?? '🎴'}</Text>
         </Circle>
@@ -93,11 +97,11 @@ function Component({ player, isMobile, placementStyle, variant = 'overlay' }: Pl
         >
           <Circle
             size={isMobile ? 10 : 12}
-            bg="linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)"
+            bg="#F59E0B"
             shadowColor="#F59E0B"
             shadowRadius={3}
             shadowOpacity={0.6}
-            style={{ backgroundColor: '#F59E0B' }}
+            style={{ backgroundImage: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)', backgroundColor: '#F59E0B' }}
           />
           <Text
             style={{
@@ -113,6 +117,23 @@ function Component({ player, isMobile, placementStyle, variant = 'overlay' }: Pl
             {formatCoins(player.coins)}
           </Text>
         </XStack>
+        {dealtCount > 0 && (
+          // @ts-ignore - Tamagui props
+          <XStack gap={isMobile ? '$0.5' : '$1'} mt="$1">
+            {Array.from({ length: dealtCount }).map((_, idx) => (
+              <YStack
+                key={idx}
+                width={isMobile ? 8 : 10}
+                height={isMobile ? 14 : 18}
+                bg="rgba(255, 255, 255, 0.25)"
+                br="$1"
+                shadowColor="#000"
+                shadowOpacity={0.2}
+                shadowRadius={2}
+              />
+            ))}
+          </XStack>
+        )}
       </YStack>
     </XStack>
   )
