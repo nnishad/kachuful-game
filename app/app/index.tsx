@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Button, Card, H2, H3, Input, Paragraph, XStack, YStack, Separator, Spinner, ScrollView, Circle } from 'tamagui'
+import { Button, Card, H2, H3, Input, Paragraph, XStack, YStack, Separator, Spinner, ScrollView, Circle, Text } from 'tamagui'
 import { Users, Play, Crown, UserX, Copy, LogOut, Check, AlertCircle, Link as LinkIcon } from '@tamagui/lucide-icons'
 import * as Clipboard from 'expo-clipboard'
 import * as Linking from 'expo-linking'
@@ -748,7 +748,11 @@ export default function LandingScreen() {
               
               <ScrollView flex={1} showsVerticalScrollIndicator={false}>
                 <YStack gap="$2" p="$2">
-                  {gameState.players.map((player: Player, index: number) => (
+                  {gameState.players.map((player: Player, index: number) => {
+                    const playerAvatar = player.avatar ?? getFallbackAvatar(index)
+                    const avatarSize = isMobile ? 40 : 48
+
+                    return (
                     <XStack 
                       key={player.id} 
                       alignItems="center" 
@@ -763,9 +767,37 @@ export default function LandingScreen() {
                       pressStyle={{ scale: 0.99 }}
                     >
                       <XStack alignItems="center" gap="$3" flex={1}>
-                        <Circle size="$3" bg={player.isHost ? "$accent" : (player.id === currentPlayerId ? "white" : "$backgroundHover")} borderWidth={1} borderColor="$borderColor">
-                           {player.isHost ? <Crown size={14} color={player.id === currentPlayerId ? "$primary" : "$color"} /> : <Users size={14} color={player.id === currentPlayerId ? "$primary" : "$color"} />}
-                        </Circle>
+                        <YStack position="relative" width={avatarSize} alignItems="center">
+                          <Circle
+                            size={avatarSize}
+                            bg="rgba(241,245,249,0.95)"
+                            borderWidth={1.5}
+                            borderColor={player.id === currentPlayerId ? '$primary' : '$borderColor'}
+                            shadowColor="#000"
+                            shadowRadius={4}
+                            shadowOpacity={0.2}
+                          >
+                            <Text fontSize={isMobile ? 20 : 24} textAlign="center">
+                              {playerAvatar}
+                            </Text>
+                          </Circle>
+                          {player.isHost && (
+                            <Circle
+                              size={isMobile ? 18 : 20}
+                              bg="$accent"
+                              position="absolute"
+                              bottom={-4}
+                              right={-4}
+                              borderWidth={1}
+                              borderColor="$background"
+                              shadowColor="#000"
+                              shadowRadius={3}
+                              shadowOpacity={0.4}
+                            >
+                              <Crown size={isMobile ? 10 : 12} color="$backgroundStrong" />
+                            </Circle>
+                          )}
+                        </YStack>
                         <YStack flex={1}>
                           <XStack alignItems="center" gap="$2">
                             <Paragraph fontWeight="bold" color={player.id === currentPlayerId ? "white" : "$color"} fontSize="$3">{player.name}</Paragraph>
@@ -791,7 +823,8 @@ export default function LandingScreen() {
                         )}
                       </XStack>
                     </XStack>
-                  ))}
+                    )
+                  })}
                 </YStack>
               </ScrollView>
             </Card>
