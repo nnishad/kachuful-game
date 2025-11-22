@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import PartySocket from "partysocket"
-import type { ClientMessage, ServerMessage, CreateLobbyPayload, JoinLobbyPayload, PlayCardPayload, ChatPayload, KickPlayerPayload } from "../types/game"
+import type { ClientMessage, ServerMessage, CreateLobbyPayload, JoinLobbyPayload, PlayCardPayload, SubmitBidPayload, ChatPayload, KickPlayerPayload } from "../types/game"
 
 /**
  * PartyKit client for Card Masters game with enterprise lobby system
@@ -133,6 +133,16 @@ export class GameClient {
   }
 
   /**
+   * Submit a bid for the current round
+   */
+  submitBid(bid: number) {
+    this.send({
+      type: 'submit_bid',
+      payload: { bid } as SubmitBidPayload,
+    })
+  }
+
+  /**
    * Send chat message
    */
   chat(message: string) {
@@ -236,6 +246,7 @@ export function useGameClient(host: string, roomId: string) {
   const ready = useCallback(() => clientRef.current?.ready(), [])
   const kickPlayer = useCallback((playerId: string) => clientRef.current?.kickPlayer(playerId), [])
   const playCard = useCallback((cardId: string, target?: string) => clientRef.current?.playCard(cardId, target), [])
+  const submitBid = useCallback((bid: number) => clientRef.current?.submitBid(bid), [])
   const chat = useCallback((message: string) => clientRef.current?.chat(message), [])
   const on = useCallback((event: string, callback: (data: unknown) => void) => clientRef.current?.on(event, callback), [])
   const off = useCallback((event: string, callback: (data: unknown) => void) => clientRef.current?.off(event, callback), [])
@@ -252,6 +263,7 @@ export function useGameClient(host: string, roomId: string) {
     ready,
     kickPlayer,
     playCard,
+    submitBid,
     chat,
     on,
     off,

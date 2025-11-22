@@ -9,11 +9,21 @@ import type {
   PlayCardPayload,
   ChatPayload,
   KickPlayerPayload,
+  SubmitBidPayload,
   GameStatus,
   PlayerStatus,
-  LobbyInfo
+  LobbyInfo,
+  PlayingCard
 } from "./types"
 import { generateLobbyCode } from "./utils"
+import { 
+  KachufulEngine,
+  IllegalBidError,
+  IllegalPlayError,
+  type EngineSnapshot,
+  type GameConfig as EngineRulesConfig,
+  type ScoreModel
+} from "../../app/game-engine"
 
 /**
  * Card Masters Game Server - Enterprise Lobby System
@@ -26,6 +36,11 @@ import { generateLobbyCode } from "./utils"
  */
 export default class CardMastersServer implements Party.Server {
   gameState: GameState
+  private engine: KachufulEngine | null = null
+  private readonly scoringModel: ScoreModel = { type: 'standard', hitPoints: 10 }
+  private readonly handSequence = [8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8]
+  private roundTransitionTimer: ReturnType<typeof setTimeout> | null = null
+  private roundTransitionDelayMs = 10_000
   
   constructor(readonly room: Party.Room) {
     // Generate unique lobby code for this room
@@ -42,6 +57,17 @@ export default class CardMastersServer implements Party.Server {
       maxPlayers: 4,
       createdAt: Date.now(),
       startedAt: null,
+      phase: 'idle',
+      handSize: 0,
+      trump: null,
+      bids: {},
+      tricksWon: {},
+      currentTrick: [],
+      pendingAction: 'none',
+      deckCount: 0,
+      lastTrickWinner: null,
+      history: [],
+      handSequence: this.handSequence,
     }
   }
 
@@ -86,6 +112,9 @@ export default class CardMastersServer implements Party.Server {
         case 'play_card':
           this.handlePlayCard(sender, msg.payload as PlayCardPayload)
           break
+        case 'submit_bid':
+          this.handleSubmitBid(sender, msg.payload as SubmitBidPayload)
+          break
         case 'chat':
           this.handleChat(sender, msg.payload as ChatPayload)
           break
@@ -114,15 +143,17 @@ export default class CardMastersServer implements Party.Server {
         timestamp: Date.now(),
       })
       
-      // Remove player immediately
-      this.removePlayer(conn.id)
-      
-      // Check if lobby is empty
-      if (this.gameState.players.length === 0) {
-        this.destroyLobby()
-      } else if (player.isHost) {
-        // Migrate host to next player
-        this.migrateHost()
+      if (this.gameState.status === 'lobby') {
+        // Remove player immediately while in lobby
+        this.removePlayer(conn.id)
+        
+        // Check if lobby is empty
+        if (this.gameState.players.length === 0) {
+          this.destroyLobby()
+        } else if (player.isHost) {
+          // Migrate host to next player
+          this.migrateHost()
+        }
       }
       
       this.broadcastGameState()
@@ -148,6 +179,9 @@ export default class CardMastersServer implements Party.Server {
       status: 'connected' as PlayerStatus,
       score: 0,
       cards: [],
+      handCount: 0,
+      bid: null,
+      tricksWon: 0,
       avatar: payload.avatar,
       isHost: true,
       joinedAt: Date.now(),
@@ -212,6 +246,9 @@ export default class CardMastersServer implements Party.Server {
       status: 'connected' as PlayerStatus,
       score: 0,
       cards: [],
+      handCount: 0,
+      bid: null,
+      tricksWon: 0,
       avatar: payload.avatar,
       isHost: false,
       joinedAt: Date.now(),
@@ -242,6 +279,11 @@ export default class CardMastersServer implements Party.Server {
     const player = this.findPlayer(conn.id)
     if (!player) {
       this.sendError(conn, 'Not in lobby')
+      return
+    }
+
+    if (this.gameState.status !== 'lobby') {
+      this.sendError(conn, 'Cannot leave during an active game')
       return
     }
 
@@ -317,6 +359,11 @@ export default class CardMastersServer implements Party.Server {
       return
     }
 
+    if (this.gameState.status !== 'lobby') {
+      this.sendError(conn, 'Cannot kick players after the game has started')
+      return
+    }
+
     const playerToKick = this.findPlayer(payload.playerId)
     if (!playerToKick) {
       this.sendError(conn, 'Player to kick not found')
@@ -376,26 +423,27 @@ export default class CardMastersServer implements Party.Server {
    * Start the game
    */
   private startGame() {
-    this.gameState.status = 'starting' as GameStatus
+    const config = this.buildEngineConfig()
+    this.engine = new KachufulEngine(config)
+    const snapshot = this.engine.start()
+
+    this.gameState.status = 'playing' as GameStatus
     this.gameState.startedAt = Date.now()
 
-    // Deal initial cards to players
-    this.gameState.players.forEach(player => {
-      player.status = 'playing' as PlayerStatus
-      player.cards = this.dealCards(5)
-    })
+    // Mark all players as actively playing
+    this.gameState.players = this.gameState.players.map(player => ({
+      ...player,
+      status: 'playing' as PlayerStatus,
+    }))
 
-    // Set first player turn (host goes first)
-    this.gameState.currentTurn = this.gameState.hostId
-    this.gameState.status = 'playing' as GameStatus
-    this.gameState.round = 1
-
+    this.syncFromSnapshot(snapshot)
     this.broadcastMessage({
       type: 'game_started',
-      payload: { round: 1, currentTurn: this.gameState.currentTurn },
+      payload: { round: this.gameState.round, currentTurn: this.gameState.currentTurn },
       timestamp: Date.now(),
     })
 
+    this.sendHandsToPlayers()
     this.broadcastGameState()
   }
 
@@ -403,43 +451,54 @@ export default class CardMastersServer implements Party.Server {
    * Handle card play action
    */
   private handlePlayCard(conn: Party.Connection, payload: PlayCardPayload) {
-    const player = this.findPlayer(conn.id)
-    
-    if (!player) {
-      this.sendError(conn, 'Player not found')
+    if (!this.engine) {
+      this.sendError(conn, 'Game has not started yet')
       return
     }
 
-    if (this.gameState.currentTurn !== conn.id) {
-      this.sendError(conn, 'Not your turn')
+    if (!payload || !payload.cardId) {
+      this.sendError(conn, 'Invalid play payload')
       return
     }
 
-    if (!player.cards.includes(payload.cardId)) {
-      this.sendError(conn, 'Card not in hand')
+    try {
+      const result = this.engine.playCard(conn.id, payload.cardId)
+      this.afterEngineUpdate(result.snapshot)
+    } catch (error) {
+      if (error instanceof IllegalPlayError) {
+        this.sendError(conn, error.message)
+        return
+      }
+      console.error('[Server] Play card error', error)
+      this.sendError(conn, 'Failed to play card')
+    }
+  }
+
+  /**
+   * Handle bid submissions during the bidding phase
+   */
+  private handleSubmitBid(conn: Party.Connection, payload: SubmitBidPayload) {
+    if (!this.engine) {
+      this.sendError(conn, 'Game has not started yet')
       return
     }
 
-    // Remove card from hand
-    player.cards = player.cards.filter(c => c !== payload.cardId)
-    
-    // Award points (simplified)
-    player.score += 10
+    if (typeof payload?.bid !== 'number') {
+      this.sendError(conn, 'Invalid bid payload')
+      return
+    }
 
-    // Move to next player's turn
-    this.nextTurn()
-
-    this.broadcastMessage({
-      type: 'turn_update',
-      payload: {
-        playerId: conn.id,
-        cardId: payload.cardId,
-        currentTurn: this.gameState.currentTurn,
-      },
-      timestamp: Date.now(),
-    })
-
-    this.broadcastGameState()
+    try {
+      const snapshot = this.engine.submitBid(conn.id, payload.bid)
+      this.afterEngineUpdate(snapshot)
+    } catch (error) {
+      if (error instanceof IllegalBidError) {
+        this.sendError(conn, error.message)
+        return
+      }
+      console.error('[Server] Bid submission error', error)
+      this.sendError(conn, 'Failed to submit bid')
+    }
   }
 
   /**
@@ -461,37 +520,18 @@ export default class CardMastersServer implements Party.Server {
   }
 
   /**
-   * Move to next player's turn
-   */
-  private nextTurn() {
-    const currentIndex = this.gameState.players.findIndex(
-      p => p.id === this.gameState.currentTurn
-    )
-    const nextIndex = (currentIndex + 1) % this.gameState.players.length
-    this.gameState.currentTurn = this.gameState.players[nextIndex].id
-
-    // Check if round is complete
-    if (nextIndex === 0) {
-      this.gameState.round++
-    }
-
-    // Check win condition
-    const winner = this.gameState.players.find(p => p.score >= 100)
-    
-    if (winner) {
-      this.endGame()
-    }
-  }
-
-  /**
    * End the game
    */
   private endGame() {
+    if (this.gameState.status === 'finished') {
+      return
+    }
+
     this.gameState.status = 'finished' as GameStatus
+    this.gameState.phase = 'completed'
     
-    // Get winner
     const winner = this.gameState.players.reduce((prev, current) => 
-      prev.score > current.score ? prev : current
+      prev.score >= current.score ? prev : current
     )
 
     this.broadcastMessage({
@@ -557,20 +597,163 @@ export default class CardMastersServer implements Party.Server {
     })
   }
 
-  /**
-   * Deal random cards
-   */
-  private dealCards(count: number): string[] {
-    const cards: string[] = []
-    const cardTypes = ['attack', 'defense', 'special', 'power']
-    
-    for (let i = 0; i < count; i++) {
-      const type = cardTypes[Math.floor(Math.random() * cardTypes.length)]
-      const value = Math.floor(Math.random() * 10) + 1
-      cards.push(`${type}-${value}-${Date.now()}-${i}`)
+  private buildEngineConfig(): EngineRulesConfig {
+    const dealerIndex = this.findDealerIndex()
+    return {
+      players: this.gameState.players.map(player => ({ id: player.id, name: player.name })),
+      handSequence: this.gameState.handSequence,
+      scoring: this.scoringModel,
+      lastBidRestriction: true,
+      trumpRotation: 'rotate',
+      initialDealerIndex: dealerIndex >= 0 ? dealerIndex : 0,
+      rngSeed: `${this.gameState.lobbyCode}-${this.gameState.createdAt}`,
     }
-    
-    return cards
+  }
+
+  private findDealerIndex(): number {
+    return this.gameState.players.findIndex(player => player.id === this.gameState.hostId)
+  }
+
+  private syncFromSnapshot(snapshot: EngineSnapshot) {
+    this.gameState.phase = snapshot.phase
+    this.gameState.handSize = snapshot.handSize
+    this.gameState.trump = snapshot.trump
+    this.gameState.currentTurn = snapshot.pendingPlayerId
+    this.gameState.round = snapshot.roundIndex + 1
+    this.gameState.bids = { ...snapshot.bids }
+    this.gameState.tricksWon = { ...snapshot.tricksWon }
+    this.gameState.currentTrick = snapshot.currentTrick.map(play => ({
+      playerId: play.playerId,
+      card: play.card as PlayingCard,
+    }))
+    this.gameState.pendingAction = snapshot.pendingAction
+    this.gameState.deckCount = snapshot.deckCount
+    this.gameState.lastTrickWinner = snapshot.lastTrickWinner
+    this.gameState.history = [...snapshot.history]
+
+    this.gameState.players = this.gameState.players.map(player => {
+      const view = snapshot.players.find(p => p.id === player.id)
+      if (!view) {
+        return player
+      }
+      return {
+        ...player,
+        score: view.score,
+        handCount: view.handCount,
+        bid: view.bid,
+        tricksWon: view.tricksWon,
+        cards: [],
+        status: player.status === 'disconnected' ? player.status : 'playing',
+      }
+    })
+  }
+
+  private afterEngineUpdate(snapshot: EngineSnapshot) {
+    this.syncFromSnapshot(snapshot)
+    this.sendHandsToPlayers()
+    this.broadcastGameState()
+
+    if (snapshot.phase === 'completed') {
+      this.clearRoundTransitionTimer()
+      this.engine = null
+      this.endGame()
+      return
+    }
+
+    if (snapshot.phase === 'round_end') {
+      this.scheduleNextRound()
+      return
+    }
+
+    this.clearRoundTransitionTimer()
+  }
+
+  private scheduleNextRound() {
+    if (!this.engine) {
+      return
+    }
+
+    if (this.roundTransitionTimer) {
+      return
+    }
+
+    this.roundTransitionTimer = setTimeout(() => {
+      this.roundTransitionTimer = null
+      if (!this.engine) {
+        return
+      }
+
+      if (this.gameState.phase !== 'round_end') {
+        return
+      }
+
+      try {
+        const snapshot = this.engine.startNextRound()
+        this.afterEngineUpdate(snapshot)
+      } catch (error) {
+        console.error('[Server] Failed to start next round', error)
+      }
+    }, this.roundTransitionDelayMs)
+  }
+
+  private clearRoundTransitionTimer() {
+    if (this.roundTransitionTimer) {
+      clearTimeout(this.roundTransitionTimer)
+      this.roundTransitionTimer = null
+    }
+  }
+
+  private sendHandsToPlayers() {
+    if (!this.engine) {
+      return
+    }
+
+    this.gameState.players.forEach(player => {
+      const view = this.engine?.getPlayerView(player.id)
+      if (!view) {
+        return
+      }
+      const playableCardIds = this.getPlayableCardIds(player.id)
+      this.sendHandToPlayer(player.id, view.cards as PlayingCard[], playableCardIds)
+    })
+  }
+
+  private sendHandToPlayer(playerId: string, cards: PlayingCard[], playableCardIds: string[]) {
+    const conn = this.room.getConnection(playerId)
+    if (!conn) {
+      return
+    }
+
+    this.sendToConnection(conn, {
+      type: 'hand_update',
+      payload: { playerId, cards, playableCardIds },
+      timestamp: Date.now(),
+    })
+  }
+
+  private getPlayableCardIds(playerId: string): string[] {
+    if (!this.engine) {
+      return []
+    }
+
+    const snapshot = this.engine.getSnapshot(playerId)
+    const viewer = snapshot.players.find(player => player.id === playerId)
+    if (!viewer || !viewer.cards.length) {
+      return []
+    }
+
+    const allCards = viewer.cards.map(card => card.id)
+    if (snapshot.phase !== 'playing' || snapshot.pendingPlayerId !== playerId) {
+      return allCards
+    }
+
+    const leadSuit = snapshot.currentTrick[0]?.card.suit
+    if (!leadSuit) {
+      return allCards
+    }
+
+    const suitMatches = viewer.cards.filter(card => card.suit === leadSuit).map(card => card.id)
+    return suitMatches.length > 0 ? suitMatches : allCards
   }
 
   /**

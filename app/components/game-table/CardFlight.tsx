@@ -1,14 +1,21 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Animated, StyleSheet } from 'react-native'
 import { Text, YStack } from 'tamagui'
 import type { PlayerDirection } from './playerLayout'
 import type { Point2D } from './animationTargets'
+import type { CardSuit } from './types'
+import { getSuitColor } from './helpers'
 
 interface CardFlightProps {
   direction: PlayerDirection
   origin: Point2D
   target: Point2D
   isMobile: boolean
+  revealCard?: boolean
+  revealDelay?: number
+  cardRank?: string
+  cardSuit?: CardSuit
 }
 
 const rotationByDirection: Record<PlayerDirection, string> = {
@@ -19,11 +26,39 @@ const rotationByDirection: Record<PlayerDirection, string> = {
   trump: '-45deg',
 }
 
-function Component({ direction, origin, target, isMobile }: CardFlightProps) {
+function Component({ direction, origin, target, isMobile, revealCard = false, revealDelay = 350, cardRank, cardSuit }: CardFlightProps) {
   const cardWidth = isMobile ? 46 : 62
   const cardHeight = isMobile ? 64 : 88
   const deltaX = target.x - origin.x
   const deltaY = target.y - origin.y
+  const shouldReveal = Boolean(revealCard && cardRank && cardSuit)
+  const flipProgress = useRef(new Animated.Value(shouldReveal ? 0 : 1)).current
+
+  useEffect(() => {
+    if (!shouldReveal) return
+    flipProgress.setValue(0)
+    const timer = setTimeout(() => {
+      Animated.timing(flipProgress, {
+        toValue: 1,
+        duration: 320,
+        useNativeDriver: true,
+      }).start()
+    }, revealDelay)
+
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [shouldReveal, revealDelay, flipProgress, cardRank, cardSuit])
+
+  const frontRotation = flipProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['180deg', '360deg'],
+  })
+
+  const backRotation = flipProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  })
 
   return (
     <YStack
@@ -47,39 +82,118 @@ function Component({ direction, origin, target, isMobile }: CardFlightProps) {
       shadowOpacity={0.5}
       shadowRadius={14}
       shadowOffset={{ width: 0, height: 6 }}
+      zIndex={40}
     >
-      <LinearGradient
-        colors={['#0F172A', '#1E293B']}
-        start={[0, 0]}
-        end={[1, 1]}
-        style={{ flex: 1 }}
-      />
-      <YStack
-        position="absolute"
-        top={isMobile ? '$1' : '$2'}
-        bottom={isMobile ? '$1' : '$2'}
-        left={isMobile ? '$1' : '$2'}
-        right={isMobile ? '$1' : '$2'}
-        borderColor="rgba(255, 255, 255, 0.25)"
-        borderWidth={1}
-        br="$2"
-        overflow="hidden"
-        opacity={0.4}
-      >
-        <YStack flex={1} jc="space-between" py="$2">
-          <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
-            ★
-          </Text>
-          <Text alignSelf="center" color="rgba(255, 255, 255, 0.4)" fontSize={isMobile ? 8 : 10}>
-            FACE DOWN
-          </Text>
-          <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
-            ★
-          </Text>
-        </YStack>
-      </YStack>
+      {shouldReveal ? (
+        <>
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              styles.backFace,
+              { transform: [{ rotateY: backRotation }] },
+            ]}
+          >
+            <LinearGradient colors={['#0F172A', '#1E293B']} start={[0, 0]} end={[1, 1]} style={{ flex: 1 }} />
+            <YStack
+              position="absolute"
+              top={isMobile ? '$1' : '$2'}
+              bottom={isMobile ? '$1' : '$2'}
+              left={isMobile ? '$1' : '$2'}
+              right={isMobile ? '$1' : '$2'}
+              borderColor="rgba(255, 255, 255, 0.25)"
+              borderWidth={1}
+              br="$2"
+              overflow="hidden"
+              opacity={0.4}
+            >
+              <YStack flex={1} jc="space-between" py="$2">
+                <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
+                  ★
+                </Text>
+                <Text alignSelf="center" color="rgba(255, 255, 255, 0.4)" fontSize={isMobile ? 8 : 10}>
+                  FACE DOWN
+                </Text>
+                <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
+                  ★
+                </Text>
+              </YStack>
+            </YStack>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              styles.frontFace,
+              { transform: [{ rotateY: frontRotation }] },
+            ]}
+          >
+            <YStack flex={1} jc="center" ai="center" gap="$1">
+              <Text fontSize={isMobile ? 20 : 26} fontWeight="700" color="#0F172A">
+                {cardRank}
+              </Text>
+              <Text
+                fontSize={isMobile ? 24 : 32}
+                fontWeight="700"
+                style={{ color: getSuitColor(cardSuit!) }}
+              >
+                {cardSuit}
+              </Text>
+            </YStack>
+          </Animated.View>
+        </>
+      ) : (
+        <>
+          <LinearGradient
+            colors={['#0F172A', '#1E293B']}
+            start={[0, 0]}
+            end={[1, 1]}
+            style={{ flex: 1 }}
+          />
+          <YStack
+            position="absolute"
+            top={isMobile ? '$1' : '$2'}
+            bottom={isMobile ? '$1' : '$2'}
+            left={isMobile ? '$1' : '$2'}
+            right={isMobile ? '$1' : '$2'}
+            borderColor="rgba(255, 255, 255, 0.25)"
+            borderWidth={1}
+            br="$2"
+            overflow="hidden"
+            opacity={0.4}
+          >
+            <YStack flex={1} jc="space-between" py="$2">
+              <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
+                ★
+              </Text>
+              <Text alignSelf="center" color="rgba(255, 255, 255, 0.4)" fontSize={isMobile ? 8 : 10}>
+                FACE DOWN
+              </Text>
+              <Text alignSelf="center" color="rgba(255, 255, 255, 0.3)" fontSize={isMobile ? 10 : 12}>
+                ★
+              </Text>
+            </YStack>
+          </YStack>
+        </>
+      )}
     </YStack>
   )
 }
 
 export const CardFlight = memo(Component)
+
+const styles = StyleSheet.create({
+  backFace: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    backfaceVisibility: 'hidden',
+  },
+  frontFace: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
+    backfaceVisibility: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.15)',
+  },
+})
