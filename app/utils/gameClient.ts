@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import './polyfills/crypto'
+import './polyfills/events'
 import PartySocket from "partysocket"
 import type { ClientMessage, ServerMessage, CreateLobbyPayload, JoinLobbyPayload, PlayCardPayload, SubmitBidPayload, ChatPayload, KickPlayerPayload } from "../types/game"
 
@@ -9,11 +11,14 @@ import type { ClientMessage, ServerMessage, CreateLobbyPayload, JoinLobbyPayload
 export class GameClient {
   private socket: PartySocket | null = null
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map()
+  private readonly hostConfig: PartyKitHostConfig
 
   constructor(
-    private host: string,
+    host: string,
     private roomId: string
-  ) {}
+  ) {
+    this.hostConfig = resolvePartyKitHost(host)
+  }
 
   /**
    * Connect to game room
@@ -24,8 +29,9 @@ export class GameClient {
     }
 
     this.socket = new PartySocket({
-      host: this.host,
+      host: this.hostConfig.host,
       room: this.roomId,
+      protocol: this.hostConfig.protocol,
     })
 
     this.socket.addEventListener('message', (event) => {
@@ -47,7 +53,7 @@ export class GameClient {
     })
 
     this.socket.addEventListener('error', (error) => {
-      this.emit('error', error)
+      this.emit('error', normalizeSocketError(error, this.hostConfig.displayHost))
     })
   }
 
@@ -268,4 +274,77 @@ export function useGameClient(host: string, roomId: string) {
     on,
     off,
   }
+}
+
+type PartyKitHostConfig = {
+  host: string
+  protocol?: 'ws' | 'wss'
+  displayHost: string
+}
+
+const resolvePartyKitHost = (input: string): PartyKitHostConfig => {
+  const fallback = 'localhost:1999'
+  if (!input) {
+    return {
+      host: fallback,
+      protocol: 'ws',
+      displayHost: `ws://${fallback}`,
+    }
+  }
+
+  const trimmed = input.trim()
+  const schemeMatch = trimmed.match(/^(https?|wss?):\/\//i)
+  if (!schemeMatch) {
+    return {
+      host: trimmed,
+      displayHost: trimmed,
+    }
+  }
+
+  const scheme = schemeMatch[1].toLowerCase()
+  const remainder = trimmed.slice(schemeMatch[0].length)
+  const protocol: 'ws' | 'wss' = scheme === 'https' || scheme === 'wss' ? 'wss' : 'ws'
+  const displayPrefix = scheme === 'wss' ? 'https' : scheme === 'ws' ? 'http' : scheme
+
+  return {
+    host: remainder,
+    protocol,
+    displayHost: `${displayPrefix}://${remainder}`,
+  }
+}
+
+const normalizeSocketError = (error: unknown, host: string): Error => {
+  if (error instanceof Error) {
+    return error
+  }
+
+  if (typeof error === 'string') {
+    return new Error(error)
+  }
+
+  if (error && typeof error === 'object') {
+    const messageFromObject = (() => {
+      if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+        return (error as { message: string }).message
+      }
+      if ('reason' in error && typeof (error as { reason?: unknown }).reason === 'string') {
+        return (error as { reason: string }).reason
+      }
+      return undefined
+    })()
+
+    if (messageFromObject) {
+      return new Error(messageFromObject)
+    }
+
+    const isRNWebSocketError =
+      ('_type' in error && (error as { _type?: unknown })._type === 'error') ||
+      ('type' in error && (error as { type?: unknown }).type === 'error')
+
+    if (isRNWebSocketError) {
+      return new Error(`Unable to reach PartyKit server at ${host}. Ensure it is running and reachable from this device.`)
+    }
+  }
+
+  return new Error('Unknown PartyKit connection error')
 }

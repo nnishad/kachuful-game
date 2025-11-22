@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Platform } from 'react-native'
+import * as ScreenOrientation from 'expo-screen-orientation'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Button, Paragraph, Stack, XStack, YStack } from 'tamagui'
 import { useResponsive } from '../hooks/useResponsive'
@@ -67,6 +68,8 @@ interface BadgePulseState {
   playerId: string
   until: number
 }
+
+type RoundSummarySource = 'auto' | 'manual' | null
 
 const RANK_LABEL: Record<number, TableCard['rank']> = {
   2: '2',
@@ -142,6 +145,37 @@ export default function GameTable({
   playableCardIds,
 }: GameTableProps = {}) {
   const { width, height, isMobile, isTablet } = useResponsive()
+  useEffect(() => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return
+    }
+
+    const lockOrientation = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE)
+      } catch {
+        // Orientation locking can fail on simulators; ignore errors.
+      }
+    }
+
+    const resetOrientation = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+      } catch {
+        try {
+          await ScreenOrientation.unlockAsync()
+        } catch {
+          // Ignore unlock failures.
+        }
+      }
+    }
+
+    lockOrientation()
+
+    return () => {
+      resetOrientation()
+    }
+  }, [])
   const [dealFlights, setDealFlights] = useState<DealFlight[]>([])
   const [playSlides, setPlaySlides] = useState<PlaySlideFlight[]>([])
   const [isDealing, setIsDealing] = useState(false)
@@ -205,8 +239,10 @@ export default function GameTable({
   }, [playableCardIds])
 
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
-  const [isRoundSummaryVisible, setRoundSummaryVisible] = useState(false)
+  const [roundSummarySource, setRoundSummarySource] = useState<RoundSummarySource>(null)
   const [roundSummaryCountdown, setRoundSummaryCountdown] = useState(0)
+  const isRoundSummaryVisible = roundSummarySource !== null
+  const isManualScoreboard = roundSummarySource === 'manual'
 
   useEffect(() => {
     setSelectedCards((prev) => {
@@ -230,6 +266,18 @@ export default function GameTable({
       return new Set([cardId])
     })
   }
+
+  const handleRoundCardPress = useCallback(() => {
+    clearRoundSummaryTimers()
+    setRoundSummaryCountdown(0)
+    setRoundSummarySource((prev) => (prev === 'manual' ? null : 'manual'))
+  }, [clearRoundSummaryTimers])
+
+  const dismissScoreboard = useCallback(() => {
+    clearRoundSummaryTimers()
+    setRoundSummaryCountdown(0)
+    setRoundSummarySource(null)
+  }, [clearRoundSummaryTimers])
 
   const selectedCardId = useMemo(() => {
     const iterator = selectedCards.values().next()
@@ -363,6 +411,10 @@ export default function GameTable({
   const activeBidderName = activeBidder?.displayName ?? null
   const activeBidderIsSelf = Boolean(activeBidder?.isSelf)
 
+  const scoreboardHeading = isManualScoreboard ? `Round ${round} standings` : `Round ${round} complete`
+  const scoreboardSubtext = isManualScoreboard
+    ? 'Live standings — tap close to return to the table.'
+    : `Next round begins in ${roundSummaryCountdown}s`
   useEffect(() => {
     if (awaitingDeal) {
       setRevealedHandCount(0)
@@ -491,11 +543,11 @@ export default function GameTable({
   useEffect(() => {
     if (phase === 'round_end') {
       clearRoundSummaryTimers()
-      setRoundSummaryVisible(true)
+      setRoundSummarySource('auto')
       setRoundSummaryCountdown(ROUND_SUMMARY_DURATION_SECONDS)
 
       roundSummaryTimeoutRef.current = setTimeout(() => {
-        setRoundSummaryVisible(false)
+        setRoundSummarySource((prev) => (prev === 'auto' ? null : prev))
       }, ROUND_SUMMARY_DURATION_MS)
 
       roundSummaryIntervalRef.current = setInterval(() => {
@@ -504,8 +556,8 @@ export default function GameTable({
       return
     }
 
-    setRoundSummaryVisible(false)
     setRoundSummaryCountdown(0)
+    setRoundSummarySource((prev) => (prev === 'auto' ? null : prev))
     clearRoundSummaryTimers()
   }, [phase, clearRoundSummaryTimers])
 
@@ -701,9 +753,17 @@ export default function GameTable({
             shadowColor="#000"
             shadowOpacity={0.45}
             shadowRadius={12}
+            onPress={handleRoundCardPress}
+            pressStyle={{ scale: 0.97 }}
+            hoverStyle={{ scale: 1.02 }}
+            animation="bouncy"
+            cursor="pointer"
           >
             <Paragraph color="$color" fontSize="$7" fontWeight="600">
               Round {round}
+            </Paragraph>
+            <Paragraph color="$color" opacity={0.7} fontSize="$2">
+              Tap to view scores
             </Paragraph>
           </YStack>
 
@@ -814,14 +874,27 @@ export default function GameTable({
               shadowOpacity={0.55}
               shadowRadius={24}
             >
-              <YStack gap="$1">
-                <Paragraph color="$secondary" fontSize={isMobile ? '$5' : '$6'} fontWeight="600">
-                  Round {round} complete
-                </Paragraph>
-                <Paragraph color="$color" opacity={0.9}>
-                  Next round begins in {roundSummaryCountdown}s
-                </Paragraph>
-              </YStack>
+              <XStack jc="space-between" ai="flex-start" gap="$3">
+                <YStack gap="$1" flex={1}>
+                  <Paragraph color="$secondary" fontSize={isMobile ? '$5' : '$6'} fontWeight="600">
+                    {scoreboardHeading}
+                  </Paragraph>
+                  <Paragraph color="$color" opacity={0.9}>
+                    {scoreboardSubtext}
+                  </Paragraph>
+                </YStack>
+                <Button
+                  size="$2"
+                  bg="rgba(255,255,255,0.08)"
+                  color="$color"
+                  onPress={dismissScoreboard}
+                  hoverStyle={{ scale: 1.02 }}
+                  pressStyle={{ scale: 0.96 }}
+                  animation="bouncy"
+                >
+                  Close
+                </Button>
+              </XStack>
 
               <YStack gap="$2" maxHeight={isMobile ? 240 : 300} w="100%" overflow="hidden">
                 {tablePlayers.map((player) => (

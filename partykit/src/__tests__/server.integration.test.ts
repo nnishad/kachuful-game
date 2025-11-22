@@ -253,6 +253,51 @@ describe('CardMastersServer integration', () => {
       vi.useRealTimers()
     }
   })
+
+  it('assigns unique avatar emojis and reuses freed slots', async () => {
+    const intercept = () => {}
+    const room = new MockRoom('EMOJI1', intercept)
+    const server = new CardMastersServer(room as unknown as Party.Room)
+
+    ;(server as unknown as { avatarEmojis: string[] }).avatarEmojis = ['😀', '😎']
+
+    const hostConn = room.createConnection('host')
+    await server.onConnect(hostConn as unknown as Party.Connection)
+    await server.onMessage(
+      JSON.stringify({ type: 'create_lobby', payload: { hostName: 'Alice', maxPlayers: 2 } }),
+      hostConn as unknown as Party.Connection,
+    )
+
+    const player2Conn = room.createConnection('player-2')
+    await server.onConnect(player2Conn as unknown as Party.Connection)
+    await server.onMessage(
+      JSON.stringify({ type: 'join_lobby', payload: { lobbyCode: server.gameState.lobbyCode, playerName: 'Bob' } }),
+      player2Conn as unknown as Party.Connection,
+    )
+
+    const bobAvatar = server.gameState.players.find(p => p.id === 'player-2')?.avatar
+    expect(bobAvatar).toBeDefined()
+
+    const avatarSet = new Set(server.gameState.players.map(p => p.avatar))
+    expect(avatarSet.size).toBe(server.gameState.players.length)
+
+    await server.onMessage(JSON.stringify({ type: 'leave_lobby', payload: {} }), player2Conn as unknown as Party.Connection)
+    expect(server.gameState.players.length).toBe(1)
+
+    const player3Conn = room.createConnection('player-3')
+    await server.onConnect(player3Conn as unknown as Party.Connection)
+    await server.onMessage(
+      JSON.stringify({ type: 'join_lobby', payload: { lobbyCode: server.gameState.lobbyCode, playerName: 'Cara' } }),
+      player3Conn as unknown as Party.Connection,
+    )
+
+    const caraAvatar = server.gameState.players.find(p => p.id === 'player-3')?.avatar
+    expect(caraAvatar).toBeDefined()
+    expect(caraAvatar).toBe(bobAvatar)
+
+    const avatarsAfterRejoin = server.gameState.players.map(p => p.avatar)
+    expect(new Set(avatarsAfterRejoin).size).toBe(server.gameState.players.length)
+  })
 })
 
 function connectionById(id: string, map: Record<string, MockConnection>): MockConnection {

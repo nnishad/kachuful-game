@@ -15,14 +15,16 @@ yarn install
 yarn dev
 ```
 
-The server will run on `http://localhost:1999`
+The server will run on `http://localhost:1999`. PartyKit does **not** whitelist IPs; the only requirement is that your client can reach the host/port you pass into `PartySocket`. When developing on a device, make sure the device is on the same network and that you use your machine's LAN IP (e.g. `192.168.x.x:1999`).
 
 ## Deploy
 
-Deploy to PartyKit cloud:
+Deploy to PartyKit cloud (publicly reachable over HTTPS/WebSocket):
 ```bash
 yarn deploy
 ```
+
+After the first deploy PartyKit prints a domain such as `https://card-masters.partykit.dev`. Point the Expo client to this hostname through `EXPO_PUBLIC_PARTYKIT_HOST` to allow anyone on the internet (iOS, Android, or web) to connect without additional IP configuration.
 
 ## Environment Variables
 
@@ -31,9 +33,9 @@ For the Expo app, create `.env` file:
 EXPO_PUBLIC_PARTYKIT_HOST=your-project.party.sh
 ```
 
-For local development, use:
+For local development, set the host to whatever IP/port your PartyKit dev server is bound to (e.g. `192.168.0.42:1999` so that simulators and devices can reach it):
 ```
-EXPO_PUBLIC_PARTYKIT_HOST=localhost:1999
+EXPO_PUBLIC_PARTYKIT_HOST=192.168.0.42:1999
 ```
 
 ## Game Flow

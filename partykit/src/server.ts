@@ -41,6 +41,8 @@ export default class CardMastersServer implements Party.Server {
   private readonly handSequence = [8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8]
   private roundTransitionTimer: ReturnType<typeof setTimeout> | null = null
   private roundTransitionDelayMs = 10_000
+  private readonly avatarEmojis = ['🦊', '🐺', '🦁', '🐯', '🐸', '🐙', '🦄', '🐉', '🦅', '🐼']
+  private readonly assignedAvatars = new Map<string, string>()
   
   constructor(readonly room: Party.Room) {
     // Generate unique lobby code for this room
@@ -182,7 +184,7 @@ export default class CardMastersServer implements Party.Server {
       handCount: 0,
       bid: null,
       tricksWon: 0,
-      avatar: payload.avatar,
+      avatar: this.assignAvatar(conn.id),
       isHost: true,
       joinedAt: Date.now(),
     }
@@ -249,7 +251,7 @@ export default class CardMastersServer implements Party.Server {
       handCount: 0,
       bid: null,
       tricksWon: 0,
-      avatar: payload.avatar,
+      avatar: this.assignAvatar(conn.id),
       isHost: false,
       joinedAt: Date.now(),
     }
@@ -595,6 +597,7 @@ export default class CardMastersServer implements Party.Server {
       payload: { message: 'Lobby has been destroyed' },
       timestamp: Date.now(),
     })
+    this.assignedAvatars.clear()
   }
 
   private buildEngineConfig(): EngineRulesConfig {
@@ -756,6 +759,26 @@ export default class CardMastersServer implements Party.Server {
     return suitMatches.length > 0 ? suitMatches : allCards
   }
 
+  private assignAvatar(playerId: string): string {
+    const existing = this.assignedAvatars.get(playerId)
+    if (existing) {
+      return existing
+    }
+
+    const used = new Set(this.assignedAvatars.values())
+    const available = this.avatarEmojis.filter(emoji => !used.has(emoji))
+    const avatar = available.length > 0
+      ? available[Math.floor(Math.random() * available.length)]
+      : '🎴'
+
+    this.assignedAvatars.set(playerId, avatar)
+    return avatar
+  }
+
+  private releaseAvatar(playerId: string) {
+    this.assignedAvatars.delete(playerId)
+  }
+
   /**
    * Find player by ID
    */
@@ -767,6 +790,7 @@ export default class CardMastersServer implements Party.Server {
    * Remove player by ID
    */
   private removePlayer(playerId: string) {
+    this.releaseAvatar(playerId)
     this.gameState.players = this.gameState.players.filter(p => p.id !== playerId)
   }
 
