@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import './polyfills/crypto'
+import 'event-target-polyfill'
 import PartySocket from "partysocket"
 import type { ClientMessage, ServerMessage, CreateLobbyPayload, JoinLobbyPayload, PlayCardPayload, SubmitBidPayload, ChatPayload, KickPlayerPayload } from "../types/game"
 
