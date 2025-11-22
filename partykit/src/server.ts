@@ -39,6 +39,8 @@ export default class CardMastersServer implements Party.Server {
   private engine: KachufulEngine | null = null
   private readonly scoringModel: ScoreModel = { type: 'standard', hitPoints: 10 }
   private readonly handSequence = [8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8]
+  private roundTransitionTimer: ReturnType<typeof setTimeout> | null = null
+  private roundTransitionDelayMs = 10_000
   
   constructor(readonly room: Party.Room) {
     // Generate unique lobby code for this room
@@ -652,8 +654,52 @@ export default class CardMastersServer implements Party.Server {
     this.broadcastGameState()
 
     if (snapshot.phase === 'completed') {
+      this.clearRoundTransitionTimer()
       this.engine = null
       this.endGame()
+      return
+    }
+
+    if (snapshot.phase === 'round_end') {
+      this.scheduleNextRound()
+      return
+    }
+
+    this.clearRoundTransitionTimer()
+  }
+
+  private scheduleNextRound() {
+    if (!this.engine) {
+      return
+    }
+
+    if (this.roundTransitionTimer) {
+      return
+    }
+
+    this.roundTransitionTimer = setTimeout(() => {
+      this.roundTransitionTimer = null
+      if (!this.engine) {
+        return
+      }
+
+      if (this.gameState.phase !== 'round_end') {
+        return
+      }
+
+      try {
+        const snapshot = this.engine.startNextRound()
+        this.afterEngineUpdate(snapshot)
+      } catch (error) {
+        console.error('[Server] Failed to start next round', error)
+      }
+    }, this.roundTransitionDelayMs)
+  }
+
+  private clearRoundTransitionTimer() {
+    if (this.roundTransitionTimer) {
+      clearTimeout(this.roundTransitionTimer)
+      this.roundTransitionTimer = null
     }
   }
 

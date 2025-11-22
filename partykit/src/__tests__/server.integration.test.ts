@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type * as Party from 'partykit/server'
 import CardMastersServer from '../server'
 import type { ServerMessage, GameState, PlayingCard, HandUpdatePayload } from '../types'
@@ -96,7 +96,7 @@ describe('CardMastersServer integration', () => {
     const chooseBid = (state: GameState): number => {
       const remaining = Object.values(state.bids).filter(value => value === null).length
       if (remaining === 1) {
-        const currentSum = Object.values(state.bids).reduce((sum, value) => sum + (value ?? 0), 0)
+        const currentSum = Object.values(state.bids).reduce<number>((sum, value) => sum + (value ?? 0), 0)
         const forbidden = state.handSize - currentSum
         return forbidden === 0 ? 1 : 0
       }
@@ -104,8 +104,14 @@ describe('CardMastersServer integration', () => {
     }
 
     let guard = 0
-    while (latestState && latestState.phase === 'bidding' && guard < 10) {
+    while (guard < 10) {
+      if (!latestState) {
+        break
+      }
       const state = requireState(latestState)
+      if (state.phase !== 'bidding') {
+        break
+      }
       const bidderId = state.currentTurn
       expect(bidderId).toBeTruthy()
       const bid = chooseBid(state)
@@ -128,8 +134,14 @@ describe('CardMastersServer integration', () => {
     }
 
     guard = 0
-    while (latestState && latestState.phase === 'playing' && guard < 20) {
+    while (guard < 20) {
+      if (!latestState) {
+        break
+      }
       const state = requireState(latestState)
+      if (state.phase !== 'playing') {
+        break
+      }
       const currentPlayerId = state.currentTurn
       expect(currentPlayerId).toBeTruthy()
       const cardId = chooseCard(currentPlayerId!, state)
@@ -142,6 +154,104 @@ describe('CardMastersServer integration', () => {
     expect(gameEnded).toBe(true)
     expect(Object.values(hands).every(cards => cards.length === 0)).toBe(true)
     expect(server.gameState.history.length).toBeGreaterThan(0)
+  })
+
+  it('automatically starts the next round after the countdown', async () => {
+    vi.useFakeTimers()
+    try {
+      const hands: Record<string, PlayingCard[]> = {}
+      let latestState: GameState | null = null
+
+      const intercept = (connectionId: string, raw: string) => {
+        const message = JSON.parse(raw) as ServerMessage
+        if (message.type === 'game_state') {
+          latestState = message.payload as GameState
+        }
+        if (message.type === 'hand_update') {
+          const payload = message.payload as HandUpdatePayload
+          hands[payload.playerId] = payload.cards
+        }
+      }
+
+      const room = new MockRoom('AUTO01', intercept)
+      const server = new CardMastersServer(room as unknown as Party.Room)
+
+      ;(server as unknown as { handSequence: number[] }).handSequence = [1, 1]
+      server.gameState.handSequence = [1, 1]
+      server.gameState.createdAt = 1700000000000
+      ;(server as unknown as { roundTransitionDelayMs: number }).roundTransitionDelayMs = 100
+
+      const hostConn = room.createConnection('host')
+      await server.onConnect(hostConn as unknown as Party.Connection)
+      await server.onMessage(JSON.stringify({ type: 'create_lobby', payload: { hostName: 'Alice', maxPlayers: 3 } }), hostConn as unknown as Party.Connection)
+
+      const player2Conn = room.createConnection('player-2')
+      await server.onConnect(player2Conn as unknown as Party.Connection)
+      await server.onMessage(JSON.stringify({ type: 'join_lobby', payload: { lobbyCode: server.gameState.lobbyCode, playerName: 'Bob' } }), player2Conn as unknown as Party.Connection)
+
+      const player3Conn = room.createConnection('player-3')
+      await server.onConnect(player3Conn as unknown as Party.Connection)
+      await server.onMessage(JSON.stringify({ type: 'join_lobby', payload: { lobbyCode: server.gameState.lobbyCode, playerName: 'Cara' } }), player3Conn as unknown as Party.Connection)
+
+      await server.onMessage(JSON.stringify({ type: 'start_game', payload: {} }), hostConn as unknown as Party.Connection)
+
+      const connectionMap: Record<string, MockConnection> = {
+        host: hostConn,
+        'player-2': player2Conn,
+        'player-3': player3Conn,
+      }
+
+      let guard = 0
+      while (guard < 10) {
+        if (!latestState) {
+          break
+        }
+        const state = requireState(latestState)
+        if (state.phase !== 'bidding') {
+          break
+        }
+        const bidderId = state.currentTurn
+        expect(bidderId).toBeTruthy()
+        const conn = connectionById(bidderId!, connectionMap)
+        await server.onMessage(JSON.stringify({ type: 'submit_bid', payload: { bid: 0 } }), conn as unknown as Party.Connection)
+        guard += 1
+      }
+
+      expect(requireState(latestState).phase).toBe('playing')
+
+      const chooseCard = (playerId: string, state: GameState): string => {
+        const hand = hands[playerId]
+        expect(hand && hand.length > 0).toBeTruthy()
+        return hand[0].id
+      }
+
+      guard = 0
+      while (guard < 20) {
+        if (!latestState) {
+          break
+        }
+        const state = requireState(latestState)
+        if (state.phase !== 'playing') {
+          break
+        }
+        const currentPlayerId = state.currentTurn
+        expect(currentPlayerId).toBeTruthy()
+        const cardId = chooseCard(currentPlayerId!, state)
+        const conn = connectionById(currentPlayerId!, connectionMap)
+        await server.onMessage(JSON.stringify({ type: 'play_card', payload: { cardId } }), conn as unknown as Party.Connection)
+        guard += 1
+      }
+
+      expect(requireState(latestState).phase).toBe('round_end')
+      expect(requireState(latestState).round).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(requireState(latestState).round).toBe(2)
+      expect(requireState(latestState).phase).toBe('bidding')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

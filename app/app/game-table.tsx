@@ -105,6 +105,9 @@ const floatingCards: FloatingCardDecoration[] = [
   { suit: '♥', rank: 'Q', id: 'fc3', top: '3%', left: '15%', rotation: 25 },
 ]
 
+const ROUND_SUMMARY_DURATION_MS = 10_000
+const ROUND_SUMMARY_DURATION_SECONDS = Math.floor(ROUND_SUMMARY_DURATION_MS / 1000)
+
 const defaultPlayers: TablePlayer[] = [
   { id: '1', displayName: 'GUEST001', coins: 3_500_000, avatar: '🎮', isCurrentTurn: true, bid: null, tricksWon: 0, status: 'connected', score: 0, handCount: 5, isHost: true, isSelf: true },
   { id: '2', displayName: 'GUEST689', coins: 5_500_000, avatar: '👨', isCurrentTurn: false, bid: null, tricksWon: 0, status: 'connected', score: 0, handCount: 5, isHost: false, isSelf: false },
@@ -147,6 +150,8 @@ export default function GameTable({
   const [badgePulse, setBadgePulse] = useState<BadgePulseState | null>(null)
   const dealTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
   const deckHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const roundSummaryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const roundSummaryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previousTrickRef = useRef<TrickView[]>([])
   const lastSelfPlayRef = useRef<{ cardId: string; index: number; total: number } | null>(null)
   const lastTrickCardsRef = useRef<TableCard[]>([])
@@ -154,6 +159,17 @@ export default function GameTable({
   const clearDealTimers = useCallback(() => {
     dealTimeoutsRef.current.forEach((timer) => clearTimeout(timer))
     dealTimeoutsRef.current = []
+  }, [])
+
+  const clearRoundSummaryTimers = useCallback(() => {
+    if (roundSummaryTimeoutRef.current) {
+      clearTimeout(roundSummaryTimeoutRef.current)
+      roundSummaryTimeoutRef.current = null
+    }
+    if (roundSummaryIntervalRef.current) {
+      clearInterval(roundSummaryIntervalRef.current)
+      roundSummaryIntervalRef.current = null
+    }
   }, [])
 
   const tablePlayers = providedPlayers && providedPlayers.length > 0 ? providedPlayers : defaultPlayers
@@ -167,7 +183,7 @@ export default function GameTable({
     [tablePlayers, width, height, isMobile]
   )
   const tableHand = useMemo<TableCard[]>(() => {
-    if (hand && hand.length > 0) {
+    if (Array.isArray(hand)) {
       return hand.map(mapToTableCard)
     }
     return fallbackHand
@@ -189,6 +205,8 @@ export default function GameTable({
   }, [playableCardIds])
 
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
+  const [isRoundSummaryVisible, setRoundSummaryVisible] = useState(false)
+  const [roundSummaryCountdown, setRoundSummaryCountdown] = useState(0)
 
   useEffect(() => {
     setSelectedCards((prev) => {
@@ -454,8 +472,9 @@ export default function GameTable({
         clearTimeout(deckHideTimeoutRef.current)
         deckHideTimeoutRef.current = null
       }
+      clearRoundSummaryTimers()
     }
-  }, [clearDealTimers])
+  }, [clearDealTimers, clearRoundSummaryTimers])
 
   useEffect(() => {
     const hasCards = (handSize ?? tableHand.length) > 0
@@ -466,6 +485,27 @@ export default function GameTable({
     setLastDealtRound(round)
     startDealAnimation()
   }, [phase, round, handSize, tableHand.length, tablePlayers.length, startDealAnimation, lastDealtRound])
+
+  useEffect(() => {
+    if (phase === 'round_end') {
+      clearRoundSummaryTimers()
+      setRoundSummaryVisible(true)
+      setRoundSummaryCountdown(ROUND_SUMMARY_DURATION_SECONDS)
+
+      roundSummaryTimeoutRef.current = setTimeout(() => {
+        setRoundSummaryVisible(false)
+      }, ROUND_SUMMARY_DURATION_MS)
+
+      roundSummaryIntervalRef.current = setInterval(() => {
+        setRoundSummaryCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+      }, 1000)
+      return
+    }
+
+    setRoundSummaryVisible(false)
+    setRoundSummaryCountdown(0)
+    clearRoundSummaryTimers()
+  }, [phase, clearRoundSummaryTimers])
 
     useEffect(() => {
       const previousTrick = previousTrickRef.current
@@ -745,6 +785,85 @@ export default function GameTable({
           )}
 
         </YStack>
+
+        {isRoundSummaryVisible && (
+          <Stack
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            bg="rgba(3, 6, 23, 0.78)"
+            zIndex={20}
+            jc="center"
+            ai="center"
+            px={isMobile ? '$3' : '$6'}
+          >
+            <YStack
+              w="100%"
+              maxWidth={isMobile ? 320 : 520}
+              bg="rgba(15, 23, 42, 0.92)"
+              br="$6"
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.12)"
+              p={isMobile ? '$4' : '$6'}
+              gap="$3"
+              shadowColor="#000"
+              shadowOpacity={0.55}
+              shadowRadius={24}
+            >
+              <YStack gap="$1">
+                <Paragraph color="$secondary" fontSize={isMobile ? '$5' : '$6'} fontWeight="600">
+                  Round {round} complete
+                </Paragraph>
+                <Paragraph color="$color" opacity={0.9}>
+                  Next round begins in {roundSummaryCountdown}s
+                </Paragraph>
+              </YStack>
+
+              <YStack gap="$2" maxHeight={isMobile ? 240 : 300} w="100%" overflow="hidden">
+                {tablePlayers.map((player) => (
+                  <XStack
+                    key={player.id}
+                    bg="rgba(255,255,255,0.04)"
+                    br="$4"
+                    borderWidth={1}
+                    borderColor={player.isSelf ? 'rgba(243, 197, 74, 0.5)' : 'rgba(255,255,255,0.06)'}
+                    px="$3"
+                    py="$2"
+                    ai="center"
+                    gap="$3"
+                  >
+                    <Paragraph fontSize="$6" color="$accent">
+                      {player.avatar ?? '🎴'}
+                    </Paragraph>
+                    <YStack flex={1} gap={2}>
+                      <Paragraph color="$color" fontWeight="600">
+                        {player.displayName}
+                        {player.isSelf ? ' · You' : ''}
+                      </Paragraph>
+                      <Paragraph color="$color" opacity={0.85} fontSize="$2">
+                        Bid {player.bid ?? '—'} · Tricks {player.tricksWon}
+                      </Paragraph>
+                    </YStack>
+                    <YStack ai="flex-end">
+                      <Paragraph color="$primary" fontWeight="700">
+                        {player.score}
+                      </Paragraph>
+                      <Paragraph color="$color" opacity={0.7} fontSize="$2">
+                        Score
+                      </Paragraph>
+                    </YStack>
+                  </XStack>
+                ))}
+              </YStack>
+
+              <Paragraph color="$color" opacity={0.8} fontSize="$2">
+                Cards stay put while we tally scores. 🎯
+              </Paragraph>
+            </YStack>
+          </Stack>
+        )}
 
         <PlayerHand
           cards={displayedHand}
