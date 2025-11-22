@@ -110,7 +110,6 @@ export default function LandingScreen() {
         name: lobby.hostName,
         status: 'connected',
         score: 0,
-        cards: [],
         handCount: 0,
         bid: null,
         tricksWon: 0,
@@ -331,7 +330,7 @@ export default function LandingScreen() {
 
     return ordered.map((player, index) => {
       const displayName = player.name ? player.name.toUpperCase() : `PLAYER ${index + 1}`
-      const baseCoins = 2_000_000 + index * 250_000
+      const baseCoins = 0
       const coinsBoost = Math.max(player.score, 0) * 10_000
       const visibleHandCount = player.id === currentPlayerId ? playerHand.length || player.handCount : player.handCount
 
@@ -443,18 +442,36 @@ export default function LandingScreen() {
   }, [gameState, myBid, myTricksWon, celebrationState.triggered, toast])
 
   const handleSubmitBid = useCallback((amount: number) => {
-    if (Number.isNaN(amount) || amount < 0) {
+    if (
+      Number.isNaN(amount) ||
+      amount < 0 ||
+      !isConnected ||
+      !gameState ||
+      gameState.phase !== 'bidding' ||
+      gameState.pendingAction !== 'bid' ||
+      !isMyTurn
+    ) {
       return
     }
     submitBid(amount)
-  }, [submitBid])
+  }, [gameState, isConnected, isMyTurn, submitBid])
 
   const handlePlayCard = useCallback((cardId: string) => {
-    if (!cardId) {
+    if (
+      !cardId ||
+      !isConnected ||
+      !gameState ||
+      gameState.phase !== 'playing' ||
+      gameState.pendingAction !== 'play' ||
+      !isMyTurn
+    ) {
+      return
+    }
+    if (playableCardIds.length && !playableCardIds.includes(cardId)) {
       return
     }
     playCard(cardId)
-  }, [playCard])
+  }, [gameState, isConnected, isMyTurn, playableCardIds, playCard])
 
   // Home Screen
   if (mode === 'home') {
@@ -915,6 +932,9 @@ export default function LandingScreen() {
         onSubmitBid={handleSubmitBid}
         onPlayCard={handlePlayCard}
         playableCardIds={playableCardIds}
+        lobbyCode={gameState.lobbyCode}
+        status={gameState.status}
+        isConnected={isConnected}
         onLeaveGame={handleLeaveLobby}
       />
     )
