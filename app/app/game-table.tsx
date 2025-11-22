@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Platform } from 'react-native'
+import * as ScreenOrientation from 'expo-screen-orientation'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Button, Paragraph, Stack, XStack, YStack } from 'tamagui'
 import { useResponsive } from '../hooks/useResponsive'
@@ -144,6 +145,37 @@ export default function GameTable({
   playableCardIds,
 }: GameTableProps = {}) {
   const { width, height, isMobile, isTablet } = useResponsive()
+  useEffect(() => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return
+    }
+
+    const lockOrientation = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE)
+      } catch {
+        // Orientation locking can fail on simulators; ignore errors.
+      }
+    }
+
+    const resetOrientation = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+      } catch {
+        try {
+          await ScreenOrientation.unlockAsync()
+        } catch {
+          // Ignore unlock failures.
+        }
+      }
+    }
+
+    lockOrientation()
+
+    return () => {
+      resetOrientation()
+    }
+  }, [])
   const [dealFlights, setDealFlights] = useState<DealFlight[]>([])
   const [playSlides, setPlaySlides] = useState<PlaySlideFlight[]>([])
   const [isDealing, setIsDealing] = useState(false)

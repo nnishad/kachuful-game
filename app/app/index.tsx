@@ -14,7 +14,7 @@ import GameTable from './game-table'
 import type { TablePlayer } from 'components/game-table/types'
 
 // Configure your PartyKit host here
-const PARTYKIT_HOST = process.env.EXPO_PUBLIC_PARTYKIT_HOST || 'localhost:1999'
+const PARTYKIT_HOST = process.env.EXPO_PUBLIC_PARTYKIT_HOST || 'http://192.168.1.173:1999'
 
 type ScreenMode = 'home' | 'create' | 'join' | 'lobby' | 'game'
 
@@ -212,13 +212,13 @@ export default function LandingScreen() {
     }
 
     const handleError = (err: unknown) => {
-        console.error('[Multiplayer] Error:', err)
-        // If error happens during join/create, reset
-        if (isLoading) {
-            setIsLoading(false)
-            setError('Failed to connect or join lobby')
-            // Don't reset fully, let user try again
-        }
+      const message = err instanceof Error ? err.message : 'Unexpected multiplayer error'
+      console.error('[Multiplayer] Error:', message, err)
+      // If error happens during join/create, reset
+      if (isLoading) {
+        setIsLoading(false)
+      }
+      setError(message)
     }
 
     on('connected', handleConnected)

@@ -7432,6 +7432,7 @@ __metadata:
     expo-linear-gradient: "npm:^15.0.7"
     expo-linking: "npm:~8.0.8"
     expo-router: "npm:~6.0.14"
+    expo-screen-orientation: "npm:~9.0.7"
     expo-splash-screen: "npm:~31.0.10"
     expo-status-bar: "npm:~3.0.8"
     expo-system-ui: "npm:~6.0.8"
@@ -9692,6 +9693,16 @@ __metadata:
     react-server-dom-webpack:
       optional: true
   checksum: 10/605136e88a39559abc9cc5f985f950cd7a823e927a787c0f45aeb69bc6652d10a2bef9e751639c976b27f05308666f1fd3988dfcae2ff684c53677c4e3728ddd
+  languageName: node
+  linkType: hard
+
+"expo-screen-orientation@npm:~9.0.7":
+  version: 9.0.7
+  resolution: "expo-screen-orientation@npm:9.0.7"
+  peerDependencies:
+    expo: "*"
+    react-native: "*"
+  checksum: 10/64c7bc1fecd05046efbacd46fa8e1204b506259b15536aadad845dfe207a3608eb60413474690ee5ac8627c1085dbe1d156386a73fd1c6bb25461ba7fdd88799
   languageName: node
   linkType: hard
 
