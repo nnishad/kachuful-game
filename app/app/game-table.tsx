@@ -225,6 +225,14 @@ export default function GameTable({
 
   const [lastDealtRound, setLastDealtRound] = useState<number | null>(null)
   const awaitingDeal = phase === 'bidding' && round > 0 && lastDealtRound !== round
+  const showBidPanel = phase === 'bidding'
+  const showTrickStatus = phase !== 'bidding'
+  const activeBidder = useMemo(() => {
+    if (!showBidPanel) return null
+    return tablePlayers.find((player) => player.isCurrentTurn) ?? null
+  }, [showBidPanel, tablePlayers])
+  const activeBidderName = activeBidder?.displayName ?? null
+  const activeBidderIsSelf = Boolean(activeBidder?.isSelf)
 
   useEffect(() => {
     if (awaitingDeal) {
@@ -346,7 +354,7 @@ export default function GameTable({
     startDealAnimation()
   }, [phase, round, handSize, tableHand.length, tablePlayers.length, startDealAnimation, lastDealtRound])
 
-  const canBid = phase === 'bidding' && pendingAction === 'bid' && isMyTurn
+  const canBid = showBidPanel && pendingAction === 'bid' && isMyTurn
   const isHandInteractive = phase === 'playing' && pendingAction === 'play' && isMyTurn
   const canPlayCard = Boolean(
     selectedCardId &&
@@ -439,22 +447,24 @@ export default function GameTable({
           )}
         </XStack>
 
-        <YStack
-          position="absolute"
-          top={isMobile ? 120 : 150}
-          left={isMobile ? '$3' : '$4'}
-          right={isMobile ? '$3' : '$4'}
-        >
-          <TrickStatus
-            players={tablePlayers}
-            currentTrick={currentTrick}
-            trump={trump}
-            phase={phase}
-            pendingAction={pendingAction}
-            round={round}
-            lastTrickWinner={lastTrickWinner}
-          />
-        </YStack>
+        {showTrickStatus && (
+          <YStack
+            position="absolute"
+            top={isMobile ? 120 : 150}
+            left={isMobile ? '$3' : '$4'}
+            right={isMobile ? '$3' : '$4'}
+          >
+            <TrickStatus
+              players={tablePlayers}
+              currentTrick={currentTrick}
+              trump={trump}
+              phase={phase}
+              pendingAction={pendingAction}
+              round={round}
+              lastTrickWinner={lastTrickWinner}
+            />
+          </YStack>
+        )}
 
         {otherPlayers.map((player, idx) => (
           <PlayerBadge
@@ -492,15 +502,19 @@ export default function GameTable({
           maxWidth={isTablet ? 720 : undefined}
           alignSelf="center"
         >
-          <BidPanel
-            handSize={handSize}
-            phase={phase}
-            currentBid={myBid}
-            canBid={canBid}
-            pendingAction={pendingAction}
-            round={round}
-            onBid={(amount) => onSubmitBid?.(amount)}
-          />
+          {showBidPanel && (
+            <BidPanel
+              handSize={handSize}
+              phase={phase}
+              currentBid={myBid}
+              canBid={canBid}
+              pendingAction={pendingAction}
+              round={round}
+              activeBidderName={activeBidderName}
+              activeBidderIsSelf={activeBidderIsSelf}
+              onBid={(amount) => onSubmitBid?.(amount)}
+            />
+          )}
 
           <HandToolbar
             selectedCardId={selectedCardId}

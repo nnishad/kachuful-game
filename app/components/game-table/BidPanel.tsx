@@ -12,6 +12,8 @@ interface BidPanelProps {
   pendingAction: PendingAction
   round: number
   onBid: (amount: number) => void
+  activeBidderName?: string | null
+  activeBidderIsSelf?: boolean
 }
 
 const phaseCopy: Record<RoundPhase, string> = {
@@ -23,7 +25,7 @@ const phaseCopy: Record<RoundPhase, string> = {
   completed: 'Match completed',
 }
 
-function Component({ handSize, phase, currentBid, canBid, pendingAction, round, onBid }: BidPanelProps) {
+function Component({ handSize, phase, currentBid, canBid, pendingAction, round, onBid, activeBidderName, activeBidderIsSelf }: BidPanelProps) {
   const bidValues = useMemo(() => {
     if (!handSize || handSize < 0) {
       return [0]
@@ -32,7 +34,25 @@ function Component({ handSize, phase, currentBid, canBid, pendingAction, round, 
   }, [handSize])
 
   const showBidButtons = phase === 'bidding'
-  const statusLabel = canBid && pendingAction === 'bid' ? 'Your turn to bid' : phaseCopy[phase]
+  const activeBidderLabel = useMemo(() => {
+    if (activeBidderIsSelf) {
+      return 'You'
+    }
+    return activeBidderName ?? null
+  }, [activeBidderName, activeBidderIsSelf])
+  const showActiveBidder = showBidButtons && Boolean(activeBidderLabel)
+  const statusLabel = useMemo(() => {
+    if (phase === 'bidding') {
+      if (canBid && pendingAction === 'bid') {
+        return 'Your turn to bid'
+      }
+      if (activeBidderLabel) {
+        return `${activeBidderLabel} is bidding`
+      }
+      return 'Waiting for bids to complete'
+    }
+    return phaseCopy[phase]
+  }, [phase, canBid, pendingAction, activeBidderLabel])
   const bidPulse = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
@@ -49,12 +69,24 @@ function Component({ handSize, phase, currentBid, canBid, pendingAction, round, 
   }, [currentBid, bidPulse])
 
   return (
-    <Card elevate bordered bg="rgba(15,23,42,0.88)" p="$3" gap="$2" ai="flex-start" width="100%">
-      <XStack gap="$2" ai="center">
-        <Sparkles size={18} color="#FDE68A" />
-        <Text color="white" fontSize={14} fontWeight="700" letterSpacing={0.3}>
-          Round {round || 1} • {handSize || 0}-card hand
-        </Text>
+    <Card elevate bordered bg="rgba(15,23,42,0.88)" p="$3" gap="$2" ai="flex-start" width="100%" overflow="hidden">
+      <XStack ai="center" jc="space-between" width="100%">
+        <XStack gap="$2" ai="center">
+          <Sparkles size={18} color="#FDE68A" />
+          <Text color="white" fontSize={14} fontWeight="700" letterSpacing={0.3}>
+            Round {round || 1} • {handSize || 0}-card hand
+          </Text>
+        </XStack>
+        {showActiveBidder ? (
+          <YStack ai="flex-end" gap="$0.5">
+            <Paragraph color="rgba(255,255,255,0.6)" fontSize={11}>
+              Current bidder
+            </Paragraph>
+            <Text color="#FCD34D" fontWeight="700" fontSize={13}>
+              {activeBidderLabel ?? '—'}
+            </Text>
+          </YStack>
+        ) : null}
       </XStack>
 
       <Paragraph color="rgba(255,255,255,0.8)" fontSize="$3">
@@ -95,10 +127,11 @@ function Component({ handSize, phase, currentBid, canBid, pendingAction, round, 
             width: '100%',
             transform: [
               {
-                scale: bidPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }),
+                scale: bidPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.02] }),
               },
             ],
             opacity: bidPulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+            alignSelf: 'stretch',
           }}
         >
           <XStack
@@ -108,9 +141,6 @@ function Component({ handSize, phase, currentBid, canBid, pendingAction, round, 
             bg="rgba(52,211,153,0.15)"
             px="$3"
             py="$2"
-            br="$4"
-            borderWidth={1}
-            borderColor="rgba(52,211,153,0.4)"
           >
             <Target size={18} color="#34D399" />
             <YStack>
