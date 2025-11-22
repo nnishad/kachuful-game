@@ -7,6 +7,7 @@ vi.mock('partysocket', () => {
   return {
     default: class MockPartySocket {
       static instance: MockPartySocket
+      readyState = 1
       // biome-ignore lint/suspicious/noExplicitAny: Mocking options
       constructor(public options: any) {
         MockPartySocket.instance = this
@@ -28,12 +29,9 @@ describe('GameClient - Client Side Lobby Management', () => {
     vi.clearAllMocks()
     client = new GameClient('localhost:1999', 'test-room')
     client.connect()
-    // biome-ignore lint/suspicious/noExplicitAny: Debugging
-    console.log('Client socket:', (client as any).socket)
     // Get the mock instance created by connect()
     // biome-ignore lint/suspicious/noExplicitAny: Accessing mock static
     mockSocket = (PartySocket as unknown as { instance: any }).instance
-    console.log('Mock socket instance:', mockSocket)
   })
 
   describe('Connection', () => {
@@ -52,8 +50,6 @@ describe('GameClient - Client Side Lobby Management', () => {
 
   describe('Lobby Actions', () => {
     it('should send create_lobby message', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: Debugging
-      console.log('Socket in test:', (client as any).socket)
       client.createLobby('Host', 4, 'avatar-1')
       expect(mockSocket.send).toHaveBeenCalledWith(JSON.stringify({
         type: 'create_lobby',
@@ -92,6 +88,14 @@ describe('GameClient - Client Side Lobby Management', () => {
         payload: { playerId: 'player-123' }
       }))
     })
+
+    it('should send submit_bid message', () => {
+      client.submitBid(2)
+      expect(mockSocket.send).toHaveBeenCalledWith(JSON.stringify({
+        type: 'submit_bid',
+        payload: { bid: 2 }
+      }))
+    })
   })
 
   describe('Event Handling', () => {
@@ -100,7 +104,6 @@ describe('GameClient - Client Side Lobby Management', () => {
       client.on('game_state', onGameState)
 
       // Simulate receiving message
-      // biome-ignore lint/suspicious/noExplicitAny: Mock calls access
       const messageHandler = mockSocket.addEventListener.mock.calls.find((call: any[]) => call[0] === 'message')[1]
       const payload = { status: 'lobby', players: [] }
       
@@ -118,7 +121,6 @@ describe('GameClient - Client Side Lobby Management', () => {
       const onError = vi.fn()
       client.on('error', onError)
 
-      // biome-ignore lint/suspicious/noExplicitAny: Mock calls access
       const messageHandler = mockSocket.addEventListener.mock.calls.find((call: any[]) => call[0] === 'message')[1]
       const payload = { message: 'Lobby full' }
       

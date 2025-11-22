@@ -104,6 +104,9 @@ export default function LandingScreen() {
         status: 'connected',
         score: 0,
         cards: [],
+        handCount: 0,
+        bid: null,
+        tricksWon: 0,
         isHost: true,
         joinedAt: Date.now()
       }
@@ -117,7 +120,18 @@ export default function LandingScreen() {
         createdAt: lobby.createdAt,
         startedAt: null,
         currentTurn: null,
-        round: 0
+        round: 0,
+        phase: 'idle',
+        handSize: 0,
+        trump: null,
+        bids: {},
+        tricksWon: {},
+        currentTrick: [],
+        pendingAction: 'none',
+        deckCount: 0,
+        lastTrickWinner: null,
+        history: [],
+        handSequence: [],
       })
 
       setIsLoading(false)
